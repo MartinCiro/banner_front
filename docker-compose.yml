@@ -1,0 +1,27 @@
+
+services:
+  bg-remover:
+    build: .
+    container_name: bg-remover
+    ports:
+      - "8000:8000"
+    volumes:
+      # Montar código para desarrollo (opcional, comentar en producción)
+      - ./main.py:/app/main.py
+      - ./templates:/app/templates
+      - ./static:/app/static
+      # Persistir caché del modelo para evitar redescargas
+      - rembg-cache:/root/.u2net
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  rembg-cache:
+    driver: local

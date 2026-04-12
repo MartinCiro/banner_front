@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BG Remover</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { mono: ['"JetBrains Mono"', 'monospace'] },
+          colors: {
+            ink: '#0e0e0e',
+            paper: '#f5f3ee',
+            accent: '#00c896',
+            dim: '#2a2a2a',
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #0e0e0e; font-family: 'JetBrains Mono', monospace; }
+
+    /* Canvas checkerboard (fondo transparente) */
+    #canvas-wrap {
+      background-image:
+        linear-gradient(45deg, #1a1a1a 25%, transparent 25%),
+        linear-gradient(-45deg, #1a1a1a 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #1a1a1a 75%),
+        linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+      background-color: #111;
+    }
+
+    canvas { display: block; max-width: 100%; image-rendering: pixelated; }
+
+    /* Cursor brush */
+    #canvas-main { cursor: none; }
+
+    #brush-cursor {
+      position: fixed;
+      pointer-events: none;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 9999;
+      transition: width .1s, height .1s;
+      mix-blend-mode: difference;
+      border: 2px solid #00c896;
+    }
+
+    .btn {
+      @apply px-4 py-2 rounded text-sm font-mono font-semibold transition-all duration-150;
+    }
+    .btn-primary {
+      @apply bg-accent text-ink hover:brightness-110 disabled:opacity-30 disabled:cursor-not-allowed;
+    }
+    .btn-ghost {
+      @apply border border-white/20 text-white/70 hover:border-white/50 hover:text-white disabled:opacity-30;
+    }
+    .btn-danger {
+      @apply border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-30;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: #2a2a2a;
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: #00c896;
+      cursor: pointer;
+    }
+
+    .tag {
+      @apply text-xs px-2 py-0.5 rounded-sm font-mono;
+      background: #1e1e1e;
+      color: #00c896;
+      border: 1px solid #00c89630;
+    }
+
+    #drop-zone {
+      border: 2px dashed #2a2a2a;
+      transition: border-color .2s, background .2s;
+    }
+    #drop-zone.drag-over {
+      border-color: #00c896;
+      background: #00c89608;
+    }
+
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid #2a2a2a;
+      border-top-color: #00c896;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    #toast {
+      transition: opacity .3s, transform .3s;
+    }
+    #toast.hide { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  </style>
+</head>
+<body class="min-h-screen text-white">
+
+  <!-- Brush cursor -->
+  <div id="brush-cursor"></div>
+
+  <!-- Toast -->
+  <div id="toast" class="hide fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded text-sm font-mono bg-dim border border-white/10 text-white/80"></div>
+
+  <!-- Header -->
+  <header class="border-b border-white/5 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-2 h-2 rounded-full bg-accent"></div>
+      <span class="text-sm font-semibold tracking-widest uppercase text-white/90">BG Remover</span>
+      <span class="tag">FastAPI + rembg</span>
+    </div>
+    <div id="status-bar" class="text-xs text-white/30">listo</div>
+  </header>
+
+  <div class="flex h-[calc(100vh-61px)]">
+
+    <!-- Sidebar izquierdo: controles -->
+    <aside class="w-64 border-r border-white/5 flex flex-col gap-0 overflow-y-auto shrink-0">
+
+      <!-- Upload -->
+      <section class="p-4 border-b border-white/5">
+        <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Imagen</p>
+        <div id="drop-zone"
+             class="rounded-lg p-5 text-center cursor-pointer"
+             onclick="document.getElementById('file-input').click()"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event)">
+          <svg class="mx-auto mb-2 w-6 h-6 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+          </svg>
+          <p class="text-xs text-white/30">Arrastra o haz clic</p>
+          <p class="text-xs text-white/15 mt-1">PNG · JPG · WEBP</p>
+        </div>
+        <input id="file-input" type="file" accept="image/*" class="hidden" onchange="handleFileSelect(event)"/>
+
+        <button id="btn-process" class="btn btn-primary w-full mt-3 flex items-center justify-center gap-2" disabled onclick="processImage()">
+          <span id="btn-process-label">Eliminar fondo</span>
+          <div id="btn-spinner" class="spinner hidden"></div>
+        </button>
+      </section>
+
+      <!-- Herramienta de pincel -->
+      <section class="p-4 border-b border-white/5">
+        <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Refinar máscara</p>
+
+        <div class="flex gap-2 mb-4">
+          <button id="tool-add" class="btn btn-ghost flex-1 text-xs" onclick="setTool('add')" title="Restaurar área">
+            + Añadir
+          </button>
+          <button id="tool-erase" class="btn btn-ghost flex-1 text-xs" onclick="setTool('erase')" title="Borrar área">
+            − Borrar
+          </button>
+        </div>
+
+        <label class="text-xs text-white/40 mb-1 block">Tamaño: <span id="brush-size-label">30</span>px</label>
+        <input id="brush-size" type="range" min="2" max="120" value="30" class="w-full" oninput="updateBrush(this.value)"/>
+
+        <label class="text-xs text-white/40 mt-3 mb-1 block">Opacidad: <span id="brush-opacity-label">100</span>%</label>
+        <input id="brush-opacity" type="range" min="10" max="100" value="100" class="w-full" oninput="updateOpacity(this.value)"/>
+
+        <button class="btn btn-ghost w-full mt-3 text-xs" onclick="toggleMaskView()">
+          <span id="mask-toggle-label">Ver máscara</span>
+        </button>
+      </section>
+
+      <!-- Historial -->
+      <section class="p-4 border-b border-white/5">
+        <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Historial</p>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost flex-1 text-xs" onclick="undo()" title="Deshacer (Ctrl+Z)">↩ Deshacer</button>
+          <button class="btn btn-ghost flex-1 text-xs" onclick="redo()" title="Rehacer (Ctrl+Y)">↪ Rehacer</button>
+        </div>
+      </section>
+
+      <!-- Fondo de previsualización -->
+      <section class="p-4 border-b border-white/5">
+        <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Fondo preview</p>
+        <div class="flex gap-2 flex-wrap">
+          <button class="w-7 h-7 rounded border-2 border-white/20 hover:border-accent" style="background:transparent;background-image:linear-gradient(45deg,#333 25%,transparent 25%),linear-gradient(-45deg,#333 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#333 75%),linear-gradient(-45deg,transparent 75%,#333 75%);background-size:8px 8px;background-position:0 0,0 4px,4px -4px,-4px 0;" onclick="setPreviewBg('transparent')" title="Transparente"></button>
+          <button class="w-7 h-7 rounded border-2 border-white/20 hover:border-accent bg-white" onclick="setPreviewBg('#ffffff')" title="Blanco"></button>
+          <button class="w-7 h-7 rounded border-2 border-white/20 hover:border-accent bg-black" onclick="setPreviewBg('#000000')" title="Negro"></button>
+          <button class="w-7 h-7 rounded border-2 border-white/20 hover:border-accent" style="background:#1a6b4a" onclick="setPreviewBg('#1a6b4a')" title="Verde"></button>
+          <button class="w-7 h-7 rounded border-2 border-white/20 hover:border-accent" style="background:#1a3a6b" onclick="setPreviewBg('#1a3a6b')" title="Azul"></button>
+        </div>
+      </section>
+
+      <!-- Exportar -->
+      <section class="p-4">
+        <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Exportar</p>
+        <button id="btn-export" class="btn btn-primary w-full text-xs" disabled onclick="exportResult()">
+          Descargar PNG
+        </button>
+        <button id="btn-reset" class="btn btn-danger w-full mt-2 text-xs" onclick="resetAll()">
+          Resetear todo
+        </button>
+      </section>
+
+    </aside>
+
+    <!-- Canvas principal -->
+    <main class="flex-1 flex items-center justify-center p-6 overflow-hidden relative" id="canvas-wrap">
+
+      <!-- Estado vacío -->
+      <div id="empty-state" class="text-center">
+        <div class="w-16 h-16 rounded-2xl border border-white/5 flex items-center justify-center mx-auto mb-4 bg-white/[0.02]">
+          <svg class="w-7 h-7 text-white/15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <p class="text-white/20 text-sm">Sube una imagen para comenzar</p>
+      </div>
+
+      <!-- Canvas de edición (oculto hasta cargar imagen) -->
+      <div id="canvas-container" class="hidden relative">
+        <!-- Canvas original (base) -->
+        <canvas id="canvas-original" class="absolute top-0 left-0"></canvas>
+        <!-- Canvas de máscara (editable) -->
+        <canvas id="canvas-mask" class="absolute top-0 left-0" style="opacity:0.85"></canvas>
+        <!-- Canvas de composición (resultado final visible) -->
+        <canvas id="canvas-main" class="relative z-10"></canvas>
+      </div>
+
+    </main>
+
+  </div>
+
+  <script>
+    // ── Estado global ──────────────────────────────────────────────
+    const state = {
+      originalFile: null,
+      originalDataUrl: null,
+      processedDataUrl: null,
+      tool: 'erase',       // 'erase' | 'add'
+      brushSize: 30,
+      brushOpacity: 1.0,
+      showMask: false,
+      previewBg: 'transparent',
+      painting: false,
+      history: [],
+      historyIndex: -1,
+      canvasW: 0,
+      canvasH: 0,
+      isProcessed: false,  // ← Nueva bandera para saber si se ha procesado el fondo
+    };
+
+    const cOriginal = document.getElementById('canvas-original');
+    const cMask     = document.getElementById('canvas-mask');
+    const cMain     = document.getElementById('canvas-main');
+    const ctxO = cOriginal.getContext('2d');
+    const ctxM = cMask.getContext('2d');
+    const ctxC = cMain.getContext('2d');
+
+    const brushCursor = document.getElementById('brush-cursor');
+    const MAX_DISPLAY  = 900; // px máximo en pantalla
+
+    // ── Drag & drop ────────────────────────────────────────────────
+    function handleDragOver(e) {
+      e.preventDefault();
+      document.getElementById('drop-zone').classList.add('drag-over');
+    }
+    function handleDragLeave(e) {
+      document.getElementById('drop-zone').classList.remove('drag-over');
+    }
+    function handleDrop(e) {
+      e.preventDefault();
+      document.getElementById('drop-zone').classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) loadFile(file);
+    }
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (file) loadFile(file);
+    }
+
+    function loadFile(file) {
+      state.originalFile = file;
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        state.originalDataUrl = ev.target.result;
+        state.isProcessed = false;  // ← Aún no se ha procesado el fondo
+        state.processedDataUrl = null;  // ← Limpiar dato anterior
+        
+        setStatus(`Imagen cargada: ${file.name}`);
+        document.getElementById('btn-process').disabled = false;
+        
+        // Mostrar la imagen original (sin procesar fondo)
+        const img = await loadImage(ev.target.result);
+        await initCanvasesWithOriginal(img);
+        
+        showToast('Imagen lista. Haz clic en "Eliminar fondo"');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Función para mostrar imagen original (sin transparencia)
+    async function initCanvasesWithOriginal(img) {
+      const scale = Math.min(1, MAX_DISPLAY / Math.max(img.width, img.height));
+      const W = Math.round(img.width * scale);
+      const H = Math.round(img.height * scale);
+
+      state.canvasW = W;
+      state.canvasH = H;
+
+      [cOriginal, cMask, cMain].forEach(c => {
+        c.width = W; c.height = H;
+        c.style.width = W + 'px'; c.style.height = H + 'px';
+      });
+      document.getElementById('canvas-container').style.width  = W + 'px';
+      document.getElementById('canvas-container').style.height = H + 'px';
+
+      // Dibujar la imagen original en el canvas original
+      ctxO.drawImage(img, 0, 0, W, H);
+      
+      // Inicializar máscara toda blanca (opaca)
+      const maskData = ctxM.createImageData(W, H);
+      for (let i = 0; i < maskData.data.length; i += 4) {
+        maskData.data[i]   = 255;
+        maskData.data[i+1] = 255;
+        maskData.data[i+2] = 255;
+        maskData.data[i+3] = 255;
+      }
+      ctxM.putImageData(maskData, 0, 0);
+
+      pushHistory();
+      renderComposite();
+      showCanvas();
+    }
+
+    // ── Procesamiento ──────────────────────────────────────────────
+    async function processImage() {
+      if (!state.originalFile) return;
+
+      setStatus('procesando…');
+      toggleBtnLoading(true);
+
+      const formData = new FormData();
+      formData.append('file', state.originalFile);
+
+      try {
+        const res = await fetch('/remove-bg', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.error);
+
+        state.processedDataUrl = data.image;
+        state.isProcessed = true;
+        await initCanvasesWithProcessed(data.image);
+        document.getElementById('btn-export').disabled = false;
+        setStatus('listo para editar');
+        showToast('Fondo eliminado. Pinta para refinar.');
+
+      } catch (err) {
+        showToast('Error: ' + err.message, true);
+        setStatus('error');
+      } finally {
+        toggleBtnLoading(false);
+      }
+    }
+
+    // Función para mostrar imagen procesada (con transparencia)
+    async function initCanvasesWithProcessed(dataUrl) {
+      const img = await loadImage(dataUrl);
+      const scale = Math.min(1, MAX_DISPLAY / Math.max(img.width, img.height));
+      const W = Math.round(img.width * scale);
+      const H = Math.round(img.height * scale);
+
+      state.canvasW = W;
+      state.canvasH = H;
+
+      [cOriginal, cMask, cMain].forEach(c => {
+        c.width = W; c.height = H;
+        c.style.width = W + 'px'; c.style.height = H + 'px';
+      });
+      document.getElementById('canvas-container').style.width  = W + 'px';
+      document.getElementById('canvas-container').style.height = H + 'px';
+
+      // Dibujar la imagen procesada en el canvas original
+      ctxO.drawImage(img, 0, 0, W, H);
+
+      // Inicializar máscara toda blanca (opaca)
+      const maskData = ctxM.createImageData(W, H);
+      for (let i = 0; i < maskData.data.length; i += 4) {
+        maskData.data[i]   = 255;
+        maskData.data[i+1] = 255;
+        maskData.data[i+2] = 255;
+        maskData.data[i+3] = 255;
+      }
+      ctxM.putImageData(maskData, 0, 0);
+
+      pushHistory();
+      renderComposite();
+      showCanvas();
+    }
+
+    // ── Render composición final ────────────────────────────────────
+    function renderComposite() {
+      const { canvasW: W, canvasH: H, isProcessed } = state;
+      ctxC.clearRect(0, 0, W, H);
+
+      // Dibujar fondo de preview si no es transparente
+      if (state.previewBg !== 'transparent') {
+        ctxC.fillStyle = state.previewBg;
+        ctxC.fillRect(0, 0, W, H);
+      }
+
+      // Obtener datos originales
+      const origData = ctxO.getImageData(0, 0, W, H);
+      const maskData = ctxM.getImageData(0, 0, W, H);
+      const outData = ctxC.createImageData(W, H);
+
+      if (isProcessed) {
+        // Si la imagen está procesada, usar la máscara para controlar la transparencia
+        for (let i = 0; i < origData.data.length; i += 4) {
+          const originalAlpha = origData.data[i + 3];
+          const maskValue = maskData.data[i];
+          const newAlpha = Math.floor((originalAlpha * maskValue) / 255);
+          
+          outData.data[i]     = origData.data[i];
+          outData.data[i + 1] = origData.data[i + 1];
+          outData.data[i + 2] = origData.data[i + 2];
+          outData.data[i + 3] = newAlpha;
+        }
+      } else {
+        // Si es imagen original, la máscara controla la opacidad total
+        for (let i = 0; i < origData.data.length; i += 4) {
+          const maskValue = maskData.data[i];
+          
+          outData.data[i]     = origData.data[i];
+          outData.data[i + 1] = origData.data[i + 1];
+          outData.data[i + 2] = origData.data[i + 2];
+          outData.data[i + 3] = maskValue; // La máscara determina la opacidad
+        }
+      }
+
+      ctxC.putImageData(outData, 0, 0);
+
+      // Overlay de máscara si está activado
+      if (state.showMask) {
+        ctxC.globalAlpha = 0.4;
+        ctxC.drawImage(cMask, 0, 0);
+        ctxC.globalAlpha = 1.0;
+      }
+    }
+
+    // ── Pincel ─────────────────────────────────────────────────────
+    cMain.addEventListener('mouseenter', () => brushCursor.style.display = 'block');
+    cMain.addEventListener('mouseleave', () => { 
+      brushCursor.style.display = 'none'; 
+      state.painting = false; 
+    });
+
+    // Actualizar cursor en movimiento
+    document.addEventListener('mousemove', (e) => {
+      brushCursor.style.left = e.clientX + 'px';
+      brushCursor.style.top  = e.clientY + 'px';
+      brushCursor.style.width  = state.brushSize + 'px';
+      brushCursor.style.height = state.brushSize + 'px';
+
+      if (state.painting) paintAt(e);
+    });
+
+    cMain.addEventListener('mousedown', (e) => { 
+      e.preventDefault();  // ← Importante para evitar selección
+      state.painting = true; 
+      paintAt(e); 
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (state.painting) { 
+        state.painting = false; 
+        pushHistory(); 
+      }
+    });
+
+    // Touch support
+    cMain.addEventListener('touchstart', (e) => { 
+      e.preventDefault(); 
+      state.painting = true; 
+      paintAt(e.touches[0]); 
+    });
+    cMain.addEventListener('touchmove',  (e) => { 
+      e.preventDefault(); 
+      paintAt(e.touches[0]); 
+    });
+    cMain.addEventListener('touchend',   () => { 
+      state.painting = false; 
+      pushHistory(); 
+    });
+
+    function paintAt(e) {
+      // ← Eliminar la condición que bloqueaba el pincel
+      // if (!state.processedDataUrl) return;
+      
+      // Verificar que tenemos un canvas válido
+      if (state.canvasW === 0 || state.canvasH === 0) return;
+      
+      const rect = cMain.getBoundingClientRect();
+      const scaleX = state.canvasW / rect.width;
+      const scaleY = state.canvasH / rect.height;
+      let clientX, clientY;
+      
+      if (e.touches) {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+      
+      const x = (clientX - rect.left) * scaleX;
+      const y = (clientY - rect.top) * scaleY;
+      const r = (state.brushSize / 2) * scaleX;
+      
+      // Validar límites
+      if (x < -r || x > state.canvasW + r || y < -r || y > state.canvasH + r) return;
+
+      // Pinta en la máscara
+      ctxM.save();
+      ctxM.globalAlpha = state.brushOpacity;
+      ctxM.globalCompositeOperation = 'source-over';
+      ctxM.beginPath();
+      ctxM.arc(x, y, r, 0, Math.PI * 2);
+
+      if (state.tool === 'erase') {
+        ctxM.fillStyle = '#000000'; // negro = transparente
+      } else {
+        ctxM.fillStyle = '#ffffff'; // blanco = opaco
+      }
+      ctxM.fill();
+      ctxM.restore();
+
+      renderComposite();
+    }
+
+    // ── Historial ──────────────────────────────────────────────────
+    function pushHistory() {
+      if (state.canvasW === 0 || state.canvasH === 0) return;
+      const snapshot = ctxM.getImageData(0, 0, state.canvasW, state.canvasH);
+      state.history = state.history.slice(0, state.historyIndex + 1);
+      state.history.push(snapshot);
+      if (state.history.length > 30) state.history.shift();
+      state.historyIndex = state.history.length - 1;
+    }
+
+    function undo() {
+      if (state.historyIndex > 0) {
+        state.historyIndex--;
+        ctxM.putImageData(state.history[state.historyIndex], 0, 0);
+        renderComposite();
+      }
+    }
+    
+    function redo() {
+      if (state.historyIndex < state.history.length - 1) {
+        state.historyIndex++;
+        ctxM.putImageData(state.history[state.historyIndex], 0, 0);
+        renderComposite();
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+      if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); }
+      // Atajo para cambiar herramienta
+      if (e.key === 'e') { setTool('erase'); }
+      if (e.key === 'a') { setTool('add'); }
+    });
+
+    // ── UI helpers ─────────────────────────────────────────────────
+    function setTool(t) {
+      state.tool = t;
+      const addBtn = document.getElementById('tool-add');
+      const eraseBtn = document.getElementById('tool-erase');
+      
+      if (t === 'add') {
+        addBtn.classList.add('bg-accent/10', 'border-accent');
+        eraseBtn.classList.remove('bg-accent/10', 'border-accent');
+        brushCursor.style.borderColor = '#00c896';
+      } else {
+        eraseBtn.classList.add('bg-accent/10', 'border-accent');
+        addBtn.classList.remove('bg-accent/10', 'border-accent');
+        brushCursor.style.borderColor = '#ef4444';
+      }
+    }
+
+    function updateBrush(v) {
+      state.brushSize = parseInt(v);
+      document.getElementById('brush-size-label').textContent = v;
+      brushCursor.style.width = v + 'px';
+      brushCursor.style.height = v + 'px';
+    }
+    
+    function updateOpacity(v) {
+      state.brushOpacity = v / 100;
+      document.getElementById('brush-opacity-label').textContent = v;
+    }
+    
+    function toggleMaskView() {
+      state.showMask = !state.showMask;
+      document.getElementById('mask-toggle-label').textContent = state.showMask ? 'Ocultar máscara' : 'Ver máscara';
+      renderComposite();
+    }
+    
+    function setPreviewBg(color) {
+      state.previewBg = color;
+      renderComposite();
+    }
+
+    function showCanvas() {
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('canvas-container').classList.remove('hidden');
+    }
+
+    function setStatus(msg) {
+      document.getElementById('status-bar').textContent = msg;
+    }
+
+    function toggleBtnLoading(loading) {
+      const btn   = document.getElementById('btn-process');
+      const label = document.getElementById('btn-process-label');
+      const spin  = document.getElementById('btn-spinner');
+      btn.disabled = loading;
+      label.textContent = loading ? 'Procesando…' : 'Eliminar fondo';
+      spin.classList.toggle('hidden', !loading);
+    }
+
+    let toastTimer;
+    function showToast(msg, error = false) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.color = error ? '#f87171' : 'rgba(255,255,255,0.8)';
+      t.classList.remove('hide');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.add('hide'), 3000);
+    }
+
+    // ── Exportar ───────────────────────────────────────────────────
+    async function exportResult() {
+      if (!state.isProcessed) {
+        showToast('Primero elimina el fondo antes de exportar', true);
+        return;
+      }
+      
+      const maskDataUrl = cMask.toDataURL('image/png');
+
+      try {
+        const res = await fetch('/apply-mask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            original: state.processedDataUrl,
+            mask: maskDataUrl
+          })
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        const a = document.createElement('a');
+        a.href = data.image;
+        a.download = 'resultado_sin_fondo.png';
+        a.click();
+        showToast('PNG exportado con éxito');
+
+      } catch (err) {
+        console.error('Error al exportar:', err);
+        // Fallback: exportar directo desde el canvas
+        const a = document.createElement('a');
+        a.href = cMain.toDataURL('image/png');
+        a.download = 'resultado_sin_fondo.png';
+        a.click();
+        showToast('Exportado desde canvas (local)');
+      }
+    }
+
+    // ── Reset ──────────────────────────────────────────────────────
+    function resetAll() {
+      state.originalFile = null;
+      state.originalDataUrl = null;
+      state.processedDataUrl = null;
+      state.isProcessed = false;
+      state.history = [];
+      state.historyIndex = -1;
+      state.canvasW = 0;
+      state.canvasH = 0;
+      
+      document.getElementById('file-input').value = '';
+      document.getElementById('btn-process').disabled = true;
+      document.getElementById('btn-export').disabled  = true;
+      document.getElementById('empty-state').classList.remove('hidden');
+      document.getElementById('canvas-container').classList.add('hidden');
+      setStatus('listo');
+    }
+
+    // ── Utils ──────────────────────────────────────────────────────
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    }
+
+    // Activar tool inicial
+    setTool('erase');
+    updateBrush(30);
+    updateOpacity(100);
+  </script>
+</body>
+</html>
