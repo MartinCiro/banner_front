@@ -243,6 +243,7 @@
                     e.stopPropagation();
                     if (evt === 'drop' && e.dataTransfer?.files?.[0]) {
                         editor.loadImage(e.dataTransfer.files[0], false);
+                        setTimeout(processImageAutomatically, 100);
                     }
                     dropZone.classList.remove('drag-over');
                 });
@@ -251,6 +252,7 @@
             fileInput.addEventListener('change', (e) => {
                 if (e.target.files?.[0]) {
                     editor.loadImage(e.target.files[0], false);
+                    setTimeout(processImageAutomatically, 100);
                 }
             });
         }
@@ -314,7 +316,7 @@
             editor.undo?.(); 
             if (window.innerWidth <= 768) toggleSidebar(); // Cierra sidebar después de acción
         };
-        
+
         const handleSidebarRedo = () => { 
             editor.redo?.(); 
             if (window.innerWidth <= 768) toggleSidebar();
@@ -329,6 +331,59 @@
         btnRedo?.addEventListener('click', handleSidebarRedo);
         mobileUndo?.addEventListener('click', handleMobileUndo); // Floating bar → sin sidebar
         mobileRedo?.addEventListener('click', handleMobileRedo);
+
+        async function processImageAutomatically() {
+            const state = editor.getState();
+            if (!state.file) return;
+            
+            const btnProcess = document.getElementById('btn-process');
+            const label = document.getElementById('btn-process-label');
+            const spinner = document.getElementById('btn-spinner');
+            const statusBar = document.getElementById('status-bar');
+            
+            // UI: estado de procesamiento
+            if (btnProcess) btnProcess.disabled = true;
+            if (label) label.textContent = 'Procesando…';
+            if (spinner) spinner.classList.remove('hidden');
+            if (statusBar) statusBar.textContent = 'procesando…';
+            
+            try {
+                const fd = new FormData();
+                fd.append('file', state.file);
+                
+                const res = await fetch('/remove-bg', { method: 'POST', body: fd });
+                const data = await res.json();
+                
+                if (!data.success) throw new Error(data.error);
+                
+                editor.setProcessedDataUrl(data.image);
+                await editor.loadImage(data.image, true);
+                
+                const btnExport = document.getElementById('btn-export');
+                if (btnExport) btnExport.disabled = false;
+                if (statusBar) statusBar.textContent = 'listo';
+                
+                showToast('✓ Fondo eliminado');
+                
+            } catch (err) {
+                console.error('Error:', err);
+                showToast('✗ ' + err.message);
+                if (statusBar) statusBar.textContent = 'error';
+            } finally {
+                if (btnProcess) btnProcess.disabled = false;
+                if (label) label.textContent = 'Eliminar fondo';
+                if (spinner) spinner.classList.add('hidden');
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            if (toast) {
+                toast.textContent = message;
+                toast.classList.add('show');
+                setTimeout(() => toast.classList.remove('show'), 2500);
+            }
+        }
         
         // Procesar imagen
         const btnProcess = document.getElementById('btn-process');
@@ -491,8 +546,6 @@
                 document.body.style.overflow = '';
             }
         });
-        
-        console.log('✅ Editor móvil inicializado');
     });
 </script>
 </body>

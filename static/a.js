@@ -471,9 +471,6 @@ const MaskEditor = (function() {
 
     /** Establecer archivo procesado (para exportación) */
     setProcessedDataUrl(url) { this.#state.processedDataUrl = url; }
-    
-    // En producción: descomentar la siguiente línea y llamar al final
-    // freeze() { return Object.freeze(this); }
   }
 
   // 🔹 FACTORY & EXPORT
