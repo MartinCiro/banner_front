@@ -3,7 +3,7 @@
  * Encapsulado, optimizado con TypedArrays y kernels matriciales.
  * Sin variables globales. API inmutable desde el frontend.
  */
-const MaskEditor = (function() {
+const MaskEditor = (function () {
   'use strict';
 
   // 🔹 CONSTANTES PRIVADAS EN CLOSURE (Opción A)
@@ -22,6 +22,15 @@ const MaskEditor = (function() {
     #history;
     #eventHandlers;
     #callbacks;
+    #zoom = 1.0;
+    #minZoom = 0.5;
+    #maxZoom = 3.0;
+    #zoomStep = 0.1;
+    #panX = 0;
+    #panY = 0;
+    #isPanning = false;
+    #lastPanX = 0;
+    #lastPanY = 0;
 
     constructor(config) {
       if (!config?.originalCanvas || !config?.maskCanvas || !config?.mainCanvas) {
@@ -51,12 +60,15 @@ const MaskEditor = (function() {
       this.#history = { stack: [], index: -1 };
       this.#brushKernel = new Map();
       this.#eventHandlers = new Map();
-      
+
       // Callbacks opcionales para UI externa
       this.#callbacks = config.callbacks || {};
 
       this.#precomputeBrushKernels();
       this.#setupEventListeners();
+
+      this.#zoom = 1.0;
+      this.#setupZoomAndPan();
     }
 
     // ───────────────────────────────────────────────────────────
@@ -75,7 +87,7 @@ const MaskEditor = (function() {
           for (let y = 0; y < kSize; y++) {
             for (let x = 0; x < kSize; x++) {
               const dx = x - radius, dy = y - radius;
-              const dist = Math.sqrt(dx*dx + dy*dy) / radius;
+              const dist = Math.sqrt(dx * dx + dy * dy) / radius;
               let val;
               if (dist <= 0.7) val = Math.round(255 * opacity * (1 - dist * 0.3));
               else if (dist <= 1) val = Math.round(255 * opacity * 0.85 * (1 - (dist - 0.7) / 0.3));
@@ -112,7 +124,7 @@ const MaskEditor = (function() {
         for (let x = startX; x < endX; x++) {
           const kx = Math.floor(x - (cx - radius));
           if (kx < 0 || kx >= kSize) continue;
-          
+
           const idx = (y * W + x) * 4;
           const kVal = kernel[ky * kSize + kx];
           if (kVal === 0) continue;
@@ -121,7 +133,7 @@ const MaskEditor = (function() {
           const delta = target - current;
           const factor = kVal / 255;
           const newVal = Math.round(current + delta * factor);
-          data[idx] = newVal; data[idx+1] = newVal; data[idx+2] = newVal;
+          data[idx] = newVal; data[idx + 1] = newVal; data[idx + 2] = newVal;
         }
       }
       this.#ctx.mask.putImageData(maskImg, 0, 0);
@@ -146,13 +158,13 @@ const MaskEditor = (function() {
 
       // Loop vectorizado
       for (let i = 0; i < orig.length; i += 4) {
-        outData[i]   = orig[i];
-        outData[i+1] = orig[i+1];
-        outData[i+2] = orig[i+2];
+        outData[i] = orig[i];
+        outData[i + 1] = orig[i + 1];
+        outData[i + 2] = orig[i + 2];
         if (isProcessed) {
-          outData[i+3] = (orig[i+3] * mask[i] / 255) | 0; // Alpha compuesto
+          outData[i + 3] = (orig[i + 3] * mask[i] / 255) | 0; // Alpha compuesto
         } else {
-          outData[i+3] = mask[i]; // Máscara controla alpha directamente
+          outData[i + 3] = mask[i]; // Máscara controla alpha directamente
         }
       }
       mainCtx.putImageData(out, 0, 0);
@@ -167,9 +179,20 @@ const MaskEditor = (function() {
     /** Conversión de coordenadas pantalla → canvas */
     #screenToCanvas(clientX, clientY) {
       const rect = this.#canvas.main.getBoundingClientRect();
-      const sx = this.#state.W / rect.width;
-      const sy = this.#state.H / rect.height;
-      return { x: (clientX - rect.left) * sx, y: (clientY - rect.top) * sy };
+      
+      // Coordenadas relativas al elemento canvas transformado
+      const canvasRelativeX = (clientX - rect.left - this.#panX) / this.#zoom;
+      const canvasRelativeY = (clientY - rect.top - this.#panY) / this.#zoom;
+      
+      // Mapear a coordenadas de píxel real (0 a W/H)
+      const x = (canvasRelativeX / rect.width) * this.#state.W * this.#zoom;
+      const y = (canvasRelativeY / rect.height) * this.#state.H * this.#zoom;
+      
+      // Limitar a los bordes de la imagen
+      return {
+        x: Math.max(0, Math.min(this.#state.W - 1, x)),
+        y: Math.max(0, Math.min(this.#state.H - 1, y))
+      };
     }
 
     /** Historial: snapshot optimizado con TypedArray */
@@ -199,7 +222,7 @@ const MaskEditor = (function() {
     /** Setup de listeners con cleanup automático */
     #setupEventListeners() {
       const handlers = {};
-      
+
       handlers.mouseMove = (e) => {
         if (this.#state.painting) {
           const pos = this.#screenToCanvas(e.clientX, e.clientY);
@@ -209,10 +232,9 @@ const MaskEditor = (function() {
       };
 
       handlers.mouseEnter = (e) => {
-          const pos = this.#screenToCanvas(e.clientX, e.clientY);
-          this.#updateCursor(pos.clientX, pos.clientY);  
+        this.#updateCursor(e.clientX, e.clientY);
       };
-      
+
 
       handlers.mouseDown = (e) => {
         e.preventDefault();
@@ -268,22 +290,39 @@ const MaskEditor = (function() {
       if (!this.#canvas.cursor) return;
       const { brushSize, tool } = this.#state;
       const c = this.#canvas.cursor;
+
+
+      const rect = this.#canvas.main.getBoundingClientRect();
+      const isOverCanvas = clientX >= rect.left && clientX <= rect.right &&
+                          clientY >= rect.top && clientY <= rect.top + rect.height;
       
-      // Posición y tamaño
-      c.style.left = `${clientX - brushSize/2}px`;
-      c.style.top = `${clientY - brushSize/2}px`;
-      c.style.width = `${brushSize}px`;
-      c.style.height = `${brushSize}px`;
+      if (!isOverCanvas) {
+        c.style.display = 'none';
+        return;
+      }
       
+      c.style.display = 'block';
+      
+      // Tamaño del cursor escalado por zoom
+      const scaledSize = brushSize * this.#zoom;
+
+      // Posición centrada en el mouse
+      c.style.left = `${clientX}px`;
+      c.style.top = `${clientY}px`;
+      c.style.width = `${scaledSize}px`;
+      c.style.height = `${scaledSize}px`;
+
+      // Toggle de clases para CSS externo (opcional)
       c.classList.toggle('erase', tool === 'erase');
       c.classList.toggle('add', tool === 'add');
-      
+
+      // Colores inline para feedback inmediato
       if (tool === 'erase') {
         c.style.borderColor = '#ef4444';
-        c.style.background = 'rgba(239, 68, 68, 0.15)';
+        c.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
       } else {
         c.style.borderColor = '#00c896';
-        c.style.background = 'rgba(0, 200, 150, 0.15)';
+        c.style.backgroundColor = 'rgba(0, 200, 150, 0.15)';
       }
     }
 
@@ -320,7 +359,7 @@ const MaskEditor = (function() {
     #buildCanvases(img, processed) {
       const { naturalWidth, naturalHeight } = img;
       const scale = Math.min(1, MAX_PX / Math.max(naturalWidth, naturalHeight));
-      
+
       this.#state.W = Math.round(naturalWidth * scale);
       this.#state.H = Math.round(naturalHeight * scale);
 
@@ -337,9 +376,9 @@ const MaskEditor = (function() {
       if (processed) {
         const orig = this.#ctx.original.getImageData(0, 0, this.#state.W, this.#state.H).data;
         for (let i = 0; i < data.length; i += 4) {
-          const a = orig[i+3];
-          data[i] = data[i+1] = data[i+2] = a;
-          data[i+3] = 255;
+          const a = orig[i + 3];
+          data[i] = data[i + 1] = data[i + 2] = a;
+          data[i + 3] = 255;
         }
       } else {
         data.fill(255);
@@ -350,6 +389,16 @@ const MaskEditor = (function() {
       this.#pushHistory();
       this.#renderComposite();
       if (this.#callbacks.onImageReady) this.#callbacks.onImageReady(processed);
+      // Resetear zoom y pan
+      this.#zoom = 1.0;
+      this.#panX = 0;
+      this.#panY = 0;
+      this.#applyTransform();
+      this.#updateZoomUI();
+      
+      // Mostrar controles de zoom
+      const zoomControls = document.getElementById('zoom-controls');
+      if (zoomControls) zoomControls.classList.remove('hidden');
     }
 
     // ───────────────────────────────────────────────────────────
@@ -371,22 +420,22 @@ const MaskEditor = (function() {
       const mask = this.#ctx.mask.getImageData(0, 0, W, H).data;
       const out = ctx.createImageData(W, H); const o = out.data;
       for (let i = 0; i < mask.length; i += 4) {
-        o[i] = o[i+1] = o[i+2] = mask[i]; o[i+3] = 255;
+        o[i] = o[i + 1] = o[i + 2] = mask[i]; o[i + 3] = 255;
       }
       ctx.putImageData(out, 0, 0);
       return tmp.toDataURL('image/png');
     }
 
     getCompositeDataUrl() { return this.#canvas.main.toDataURL('image/png'); }
-    setBrushSize(v) { 
-        const raw = +v;
-        // Snap al tamaño precomputado más cercano
-        const snapped = BRUSH_PRECOMPUTE_SIZES.reduce((prev, curr) => 
-            Math.abs(curr - raw) < Math.abs(prev - raw) ? curr : prev
-        );
-        this.#state.brushSize = snapped; 
-        if(this.#callbacks.onBrushChange) this.#callbacks.onBrushChange(snapped); 
-        return snapped; 
+    setBrushSize(v) {
+      const raw = +v;
+      // Snap al tamaño precomputado más cercano
+      const snapped = BRUSH_PRECOMPUTE_SIZES.reduce((prev, curr) =>
+        Math.abs(curr - raw) < Math.abs(prev - raw) ? curr : prev
+      );
+      this.#state.brushSize = snapped;
+      if (this.#callbacks.onBrushChange) this.#callbacks.onBrushChange(snapped);
+      return snapped;
     }
     toggleTool() { const n = this.#state.tool === 'erase' ? 'add' : 'erase'; this.#setTool(n); return n; }
     toggleMaskOverlay() { this.#state.showMask = !this.#state.showMask; this.#renderComposite(); return this.#state.showMask; }
@@ -405,90 +454,90 @@ const MaskEditor = (function() {
     getProcessedDataUrl() { return this.#state.processedDataUrl; }
 
     /** Establecer dataUrl procesada */
-    setProcessedDataUrl(url) {  this.#state.processedDataUrl = url; }
+    setProcessedDataUrl(url) { this.#state.processedDataUrl = url; }
 
     /** Método toggleTool para cambiar entre añadir/borrar */
-    toggleTool() { 
-        const newTool = this.#state.tool === 'erase' ? 'add' : 'erase'; 
-        this.#setTool(newTool); 
-        return newTool; 
+    toggleTool() {
+      const newTool = this.#state.tool === 'erase' ? 'add' : 'erase';
+      this.#setTool(newTool);
+      return newTool;
     }
 
     /** Método getMaskDataUrl ya lo tienes, asegúrate que esté */
     getMaskDataUrl() {
-        const { W, H } = this.#state;
-        if (W === 0 || H === 0) return '';
-        
-        const tmp = document.createElement('canvas'); 
-        tmp.width = W; 
-        tmp.height = H;
-        const ctx = tmp.getContext('2d');
-        const mask = this.#ctx.mask.getImageData(0, 0, W, H).data;
-        const out = ctx.createImageData(W, H); 
-        const o = out.data;
-        
-        for (let i = 0; i < mask.length; i += 4) {
-            o[i] = o[i+1] = o[i+2] = mask[i]; 
-            o[i+3] = 255;
-        }
-        ctx.putImageData(out, 0, 0);
-        return tmp.toDataURL('image/png');
+      const { W, H } = this.#state;
+      if (W === 0 || H === 0) return '';
+
+      const tmp = document.createElement('canvas');
+      tmp.width = W;
+      tmp.height = H;
+      const ctx = tmp.getContext('2d');
+      const mask = this.#ctx.mask.getImageData(0, 0, W, H).data;
+      const out = ctx.createImageData(W, H);
+      const o = out.data;
+
+      for (let i = 0; i < mask.length; i += 4) {
+        o[i] = o[i + 1] = o[i + 2] = mask[i];
+        o[i + 3] = 255;
+      }
+      ctx.putImageData(out, 0, 0);
+      return tmp.toDataURL('image/png');
     }
 
     /** Método getCompositeDataUrl ya lo tienes, asegúrate que esté */
-    getCompositeDataUrl() { 
-        if (!this.#canvas.main || this.#state.W === 0) return '';
-        return this.#canvas.main.toDataURL('image/png'); 
+    getCompositeDataUrl() {
+      if (!this.#canvas.main || this.#state.W === 0) return '';
+      return this.#canvas.main.toDataURL('image/png');
     }
 
     /** Reiniciar editor completamente */
     reset() {
-        if (this.#state.W > 0 && this.#state.H > 0) {
-            // Limpiar máscara (todo blanco = 255)
-            const maskImg = this.#ctx.mask.createImageData(this.#state.W, this.#state.H);
-            maskImg.data.fill(255);
-            this.#ctx.mask.putImageData(maskImg, 0, 0);
-            
-            // Resetear estado
-            this.#state.file = null;
-            this.#state.processedDataUrl = null;
-            this.#state.isProcessed = false;
-            this.#state.painting = false;
-            
-            // Limpiar historial
-            this.#history.stack = [];
-            this.#history.index = -1;
-            
-            // Limpiar canvas
-            this.#ctx.original.clearRect(0, 0, this.#state.W, this.#state.H);
-            this.#ctx.main.clearRect(0, 0, this.#state.W, this.#state.H);
-            
-            this.#renderComposite();
-        }
+      if (this.#state.W > 0 && this.#state.H > 0) {
+        // Limpiar máscara (todo blanco = 255)
+        const maskImg = this.#ctx.mask.createImageData(this.#state.W, this.#state.H);
+        maskImg.data.fill(255);
+        this.#ctx.mask.putImageData(maskImg, 0, 0);
+
+        // Resetear estado
+        this.#state.file = null;
+        this.#state.processedDataUrl = null;
+        this.#state.isProcessed = false;
+        this.#state.painting = false;
+
+        // Limpiar historial
+        this.#history.stack = [];
+        this.#history.index = -1;
+
+        // Limpiar canvas
+        this.#ctx.original.clearRect(0, 0, this.#state.W, this.#state.H);
+        this.#ctx.main.clearRect(0, 0, this.#state.W, this.#state.H);
+
+        this.#renderComposite();
+      }
     }
 
     /** Cargar imagen (versión mejorada que guarda el archivo) */
     async loadImage(source, isProcessed = false) {
-        const img = await new Promise((resolve, reject) => {
-            const i = new Image(); 
-            i.onload = () => resolve(i); 
-            i.onerror = reject;
-            i.src = source instanceof File ? URL.createObjectURL(source) : source;
-        });
-        
-        // Guardar archivo si es File
-        if (source instanceof File) {
-            this.#state.file = source;
-        }
-        
-        this.#state.isProcessed = isProcessed;
-        this.#buildCanvases(img, isProcessed);
-        
-        return true;
-    }
-        destroy() { this.#eventHandlers.get('cleanup')?.(); this.#brushKernel.clear(); this.#history.stack = []; }
+      const img = await new Promise((resolve, reject) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.onerror = reject;
+        i.src = source instanceof File ? URL.createObjectURL(source) : source;
+      });
 
-        /** Deshacer (público) */
+      // Guardar archivo si es File
+      if (source instanceof File) {
+        this.#state.file = source;
+      }
+
+      this.#state.isProcessed = isProcessed;
+      this.#buildCanvases(img, isProcessed);
+
+      return true;
+    }
+    destroy() { this.#eventHandlers.get('cleanup')?.(); this.#brushKernel.clear(); this.#history.stack = []; }
+
+    /** Deshacer (público) */
     undo() { this.#undo(); }
 
     /** Rehacer (público) */
@@ -499,6 +548,160 @@ const MaskEditor = (function() {
 
     /** Establecer archivo procesado (para exportación) */
     setProcessedDataUrl(url) { this.#state.processedDataUrl = url; }
+
+    #setupZoomAndPan() {
+      const container = this.#canvas.main.parentElement;
+
+      // Zoom con rueda del mouse
+      const wheelHandler = (e) => {
+        e.preventDefault();
+
+        const rect = this.#canvas.main.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Punto focal en coordenadas del canvas
+        const focalX = (mouseX - this.#panX) / this.#zoom;
+        const focalY = (mouseY - this.#panY) / this.#zoom;
+
+        // Calcular nuevo zoom
+        const delta = e.deltaY > 0 ? -this.#zoomStep : this.#zoomStep;
+        const newZoom = Math.max(this.#minZoom, Math.min(this.#maxZoom, this.#zoom + delta));
+
+        if (newZoom !== this.#zoom) {
+          // Ajustar pan para mantener el punto focal
+          this.#panX = mouseX - focalX * newZoom;
+          this.#panY = mouseY - focalY * newZoom;
+          this.#zoom = newZoom;
+
+          this.#applyTransform();
+          this.#updateZoomUI();
+        }
+      };
+
+      // Pan con click medio o espacio + click
+      const mouseDownHandler = (e) => {
+        // Pan con botón central (e.button === 1) o espacio + click izquierdo
+        if (e.button === 1 || (e.button === 0 && e.spaceKey)) {
+          e.preventDefault();
+          this.#isPanning = true;
+          this.#lastPanX = e.clientX;
+          this.#lastPanY = e.clientY;
+          container.classList.add('panning');
+        }
+      };
+
+      const mouseMoveHandler = (e) => {
+        if (this.#isPanning) {
+          const dx = e.clientX - this.#lastPanX;
+          const dy = e.clientY - this.#lastPanY;
+
+          this.#panX += dx;
+          this.#panY += dy;
+
+          this.#lastPanX = e.clientX;
+          this.#lastPanY = e.clientY;
+
+          this.#applyTransform();
+        }
+      };
+
+      const mouseUpHandler = () => {
+        this.#isPanning = false;
+        container.classList.remove('panning');
+      };
+
+      // Track de tecla espacio
+      const keyDownHandler = (e) => {
+        if (e.code === 'Space' && !e.target.matches('input, textarea')) {
+          e.preventDefault();
+          e.spaceKey = true;
+          container.style.cursor = 'grab';
+        }
+      };
+
+      const keyUpHandler = (e) => {
+        if (e.code === 'Space') {
+          e.preventDefault();
+          e.spaceKey = false;
+          container.style.cursor = '';
+          if (!this.#isPanning) {
+            container.classList.remove('panning');
+          }
+        }
+      };
+
+      // Registrar eventos
+      container.addEventListener('wheel', wheelHandler, { passive: false });
+      container.addEventListener('mousedown', mouseDownHandler);
+      document.addEventListener('mousemove', mouseMoveHandler);
+      document.addEventListener('mouseup', mouseUpHandler);
+      document.addEventListener('keydown', keyDownHandler);
+      document.addEventListener('keyup', keyUpHandler);
+
+      // Guardar para cleanup
+      const originalCleanup = this.#eventHandlers.get('cleanup');
+      this.#eventHandlers.set('cleanup', () => {
+        originalCleanup?.();
+        container.removeEventListener('wheel', wheelHandler);
+        container.removeEventListener('mousedown', mouseDownHandler);
+        document.removeEventListener('mousemove', mouseMoveHandler);
+        document.removeEventListener('mouseup', mouseUpHandler);
+        document.removeEventListener('keydown', keyDownHandler);
+        document.removeEventListener('keyup', keyUpHandler);
+      });
+    }
+
+    #applyTransform() {
+      this.#canvas.main.style.transform = `translate(${this.#panX}px, ${this.#panY}px) scale(${this.#zoom})`;
+    }
+
+    #updateZoomUI() {
+      const percent = Math.round(this.#zoom * 100);
+      const label = document.getElementById('zoom-level');
+      if (label) label.textContent = `${percent}%`;
+
+      // Actualizar cursor del pincel según zoom
+      if (this.#canvas.cursor) {
+        const size = this.#state.brushSize * this.#zoom;
+        this.#canvas.cursor.style.width = `${size}px`;
+        this.#canvas.cursor.style.height = `${size}px`;
+      }
+    }
+
+    // Métodos públicos para zoom
+    zoomIn() {
+      const newZoom = Math.min(this.#maxZoom, this.#zoom + this.#zoomStep);
+      if (newZoom !== this.#zoom) {
+        this.#zoom = newZoom;
+        this.#applyTransform();
+        this.#updateZoomUI();
+      }
+      return this.#zoom;
+    }
+
+    zoomOut() {
+      const newZoom = Math.max(this.#minZoom, this.#zoom - this.#zoomStep);
+      if (newZoom !== this.#zoom) {
+        this.#zoom = newZoom;
+        this.#applyTransform();
+        this.#updateZoomUI();
+      }
+      return this.#zoom;
+    }
+
+    zoomReset() {
+      this.#zoom = 1.0;
+      this.#panX = 0;
+      this.#panY = 0;
+      this.#applyTransform();
+      this.#updateZoomUI();
+      return this.#zoom;
+    }
+
+    getZoom() {
+      return this.#zoom;
+    }
   }
 
   // 🔹 FACTORY & EXPORT
