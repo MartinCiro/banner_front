@@ -207,6 +207,13 @@ const MaskEditor = (function() {
         }
         this.#updateCursor(e.clientX, e.clientY);
       };
+
+      handlers.mouseEnter = (e) => {
+          const pos = this.#screenToCanvas(e.clientX, e.clientY);
+          this.#updateCursor(pos.clientX, pos.clientY);  
+      };
+      
+
       handlers.mouseDown = (e) => {
         e.preventDefault();
         this.#state.painting = true;
@@ -243,6 +250,7 @@ const MaskEditor = (function() {
       this.#canvas.main.addEventListener('touchstart', handlers.touchStart, { passive: false });
       this.#canvas.main.addEventListener('touchmove', handlers.touchMove, { passive: false });
       this.#canvas.main.addEventListener('touchend', handlers.touchEnd);
+      this.#canvas.main.addEventListener('mouseenter', handlers.mouseEnter);
       document.addEventListener('keydown', handlers.keyDown);
 
       this.#eventHandlers.set('cleanup', () => {
@@ -260,11 +268,23 @@ const MaskEditor = (function() {
       if (!this.#canvas.cursor) return;
       const { brushSize, tool } = this.#state;
       const c = this.#canvas.cursor;
+      
+      // Posición y tamaño
       c.style.left = `${clientX - brushSize/2}px`;
       c.style.top = `${clientY - brushSize/2}px`;
       c.style.width = `${brushSize}px`;
       c.style.height = `${brushSize}px`;
-      c.className = tool === 'erase' ? 'erase' : '';
+      
+      c.classList.toggle('erase', tool === 'erase');
+      c.classList.toggle('add', tool === 'add');
+      
+      if (tool === 'erase') {
+        c.style.borderColor = '#ef4444';
+        c.style.background = 'rgba(239, 68, 68, 0.15)';
+      } else {
+        c.style.borderColor = '#00c896';
+        c.style.background = 'rgba(0, 200, 150, 0.15)';
+      }
     }
 
     #undo() {
@@ -358,8 +378,16 @@ const MaskEditor = (function() {
     }
 
     getCompositeDataUrl() { return this.#canvas.main.toDataURL('image/png'); }
-    setBrushSize(v) { this.#state.brushSize = Math.max(5, Math.min(200, +v)); if(this.#callbacks.onBrushChange) this.#callbacks.onBrushChange(this.#state.brushSize); return this.#state.brushSize; }
-    setBrushOpacity(p) { this.#state.brushOpacity = Math.max(0, Math.min(1, +p / 100)); return this.#state.brushOpacity; }
+    setBrushSize(v) { 
+        const raw = +v;
+        // Snap al tamaño precomputado más cercano
+        const snapped = BRUSH_PRECOMPUTE_SIZES.reduce((prev, curr) => 
+            Math.abs(curr - raw) < Math.abs(prev - raw) ? curr : prev
+        );
+        this.#state.brushSize = snapped; 
+        if(this.#callbacks.onBrushChange) this.#callbacks.onBrushChange(snapped); 
+        return snapped; 
+    }
     toggleTool() { const n = this.#state.tool === 'erase' ? 'add' : 'erase'; this.#setTool(n); return n; }
     toggleMaskOverlay() { this.#state.showMask = !this.#state.showMask; this.#renderComposite(); return this.#state.showMask; }
     setPreviewBackground(c) { this.#state.previewBg = c; this.#renderComposite(); }

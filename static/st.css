@@ -28,28 +28,16 @@ body {
 #canvas-main {
   display: block;
   max-width: 100%;
-  cursor: none;
+}
+
+#canvas-wrap:hover #brush-cursor,
+#canvas-container:hover #brush-cursor {
+  display: block !important;
 }
 
 #brush-cursor {
-  position: fixed;
-  pointer-events: none;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 9999;
-  display: none;
-  border: 1.5px solid #00c896;
-  transition: width .08s, height .08s;
-}
-
-#canvas-main:hover+#brush-cursor,
-#canvas-main:hover~#brush-cursor,
-body:has(#canvas-main:hover) #brush-cursor {
-  display: block;
-}
-
-#brush-cursor.erase {
-  border-color: #ef4444;
+  contain: none !important;
+  will-change: transform, left, top;
 }
 
 /* Botones: CSS puro para evitar conflictos con Tailwind @apply en CDN */
@@ -217,6 +205,69 @@ input[type=range]::-webkit-slider-thumb {
   display: none !important;
 }
 
+/* Utilidades para touch */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Controles de zoom */
+.zoom-controls {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  gap: 4px;
+  background: rgba(14, 14, 14, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 20;
+}
+
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.zoom-level {
+  min-width: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 0 8px;
+}
+
+.zoom-btn.reset-zoom {
+  width: auto;
+  padding: 0 12px;
+}
+
+
+
 @media (max-width: 768px) {
   #brush-cursor {
     display: none !important;
@@ -267,6 +318,17 @@ input[type=range]::-webkit-slider-thumb {
     width: 100%;
     height: calc(100vh - 120px);
   }
+
+  .zoom-controls {
+    bottom: 80px;
+    right: 12px;
+  }
+  
+  .zoom-btn {
+    width: 44px;
+    height: 44px;
+  }
+  
 }
 
 @media (min-width: 769px) {
@@ -285,13 +347,12 @@ input[type=range]::-webkit-slider-thumb {
   #sidebar-overlay {
     display: none !important;
   }
+  #brush-cursor {
+    display: block !important;
+    min-width: 10px !important;
+    min-height: 10px !important;
+    /* Eliminar mix-blend-mode si causa problemas */
+    mix-blend-mode: normal !important;
+  }
 }
 
-/* Utilidades para touch */
-.touch-target {
-  min-height: 44px;
-  min-width: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}

@@ -75,11 +75,6 @@
         </div>
 
         <input id="file-input" type="file" accept="image/*" class="hidden" />
-
-        <button id="btn-process" class="btn btn-primary w-full mt-3 touch-target" disabled>
-          <span id="btn-process-label">Eliminar fondo</span>
-          <div id="btn-spinner" class="spinner hidden"></div>
-        </button>
       </section>
 
       <!-- Pincel -->
@@ -99,15 +94,10 @@
           </button>
         </div>
 
-        <label class="text-xs text-white/40 mb-1 block">Tamaño: <span id="brush-size-label">30</span>px</label>
-        <input id="brush-size" type="range" min="2" max="120" value="30" class="w-full" />
-
-        <label class="text-xs text-white/40 mt-3 mb-1 block">Opacidad: <span id="brush-opacity-label">100</span>%</label>
-        <input id="brush-opacity" type="range" min="10" max="100" value="100" class="w-full" />
-
-        <button id="mask-toggle" class="btn btn-ghost w-full mt-3 text-xs touch-target">
-          <span id="mask-toggle-label">Ver máscara</span>
-        </button>
+        <label class="text-xs text-white/40 mb-1 block">
+            Tamaño: <span id="brush-size-label">30</span>px
+        </label>
+        <input id="brush-size" type="range" min="10" max="100" value="30" step="10" class="w-full accent-accent" />
       </section>
 
       <!-- Historial -->
@@ -123,7 +113,6 @@
       <section class="p-4">
         <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Exportar</p>
         <button id="btn-export" class="btn btn-primary w-full text-xs touch-target mb-2" disabled>Descargar PNG</button>
-        <button id="btn-reset" class="btn btn-danger w-full text-xs touch-target">Resetear</button>
       </section>
 
       <!-- Spacer para móvil -->
@@ -154,6 +143,9 @@
             <button id="mobile-mask-toggle" class="btn btn-ghost touch-target px-3 py-2 text-xs flex-1">Máscara</button>
             <button id="mobile-redo" class="btn btn-ghost touch-target px-3 py-2 text-xs" title="Rehacer">↪</button>
           </div>
+        </div>
+        <div id="brush-cursor" class="pointer-events-none fixed z-50 hidden md:block"
+            style="border: 2px solid #00c896; border-radius: 50%; transform: translate(-50%, -50%); mix-blend-mode: difference;">
         </div>
     </main>
   </div>
@@ -187,20 +179,24 @@
                     }
                 },
                 onImageReady: (processed) => {
-                    const btnProcess = document.getElementById('btn-process');
                     const btnExport = document.getElementById('btn-export');
-                    if (btnProcess) btnProcess.disabled = processed;
                     if (btnExport) btnExport.disabled = !processed;
                     
                     if (emptyState && canvasContainer) {
                         emptyState.classList.add('hidden');
                         canvasContainer.classList.remove('hidden');
                     }
+                    
+                    // Si la imagen NO es procesada (loaded=false), iniciar auto-procesamiento
+                    if (!processed && editor.getState().file) processImageAutomatically();
                 },
                 onBrushChange: (size) => {
-                    const label = document.getElementById('brush-size-label');
-                    if (label) label.textContent = size;
-                }
+                    const brushInput = document.getElementById('brush-size');
+                    if (brushInput && document.activeElement !== brushInput) {
+                        const label = document.getElementById('brush-size-label');
+                        if (label) label.textContent = size;
+                    }
+                },
             }
         });
         
@@ -243,7 +239,6 @@
                     e.stopPropagation();
                     if (evt === 'drop' && e.dataTransfer?.files?.[0]) {
                         editor.loadImage(e.dataTransfer.files[0], false);
-                        setTimeout(processImageAutomatically, 100);
                     }
                     dropZone.classList.remove('drag-over');
                 });
@@ -252,7 +247,6 @@
             fileInput.addEventListener('change', (e) => {
                 if (e.target.files?.[0]) {
                     editor.loadImage(e.target.files[0], false);
-                    setTimeout(processImageAutomatically, 100);
                 }
             });
         }
@@ -272,39 +266,15 @@
 
         // Controles de pincel
         const brushSize = document.getElementById('brush-size');
-        const brushOpacity = document.getElementById('brush-opacity');
         
         if (brushSize) {
             brushSize.addEventListener('input', (e) => {
                 const val = parseInt(e.target.value);
-                editor.setBrushSize(val);
+                editor.setBrushSize(val);  // ← Esto es lo que realmente cambia el pincel
                 const label = document.getElementById('brush-size-label');
                 if (label) label.textContent = val;
             });
         }
-        
-        if (brushOpacity) {
-            brushOpacity.addEventListener('input', (e) => {
-                const val = parseInt(e.target.value);
-                editor.setBrushOpacity(val);
-                const label = document.getElementById('brush-opacity-label');
-                if (label) label.textContent = val;
-            });
-        }
-        
-        // Toggle máscara
-        const maskToggle = document.getElementById('mask-toggle');
-        const mobileMaskToggle = document.getElementById('mobile-mask-toggle');
-        
-        function handleMaskToggle() {
-            const visible = editor.toggleMaskOverlay();
-            const label = document.getElementById('mask-toggle-label');
-            if (label) label.textContent = visible ? 'Ocultar máscara' : 'Ver máscara';
-            if (mobileMaskToggle) mobileMaskToggle.textContent = visible ? 'Ocultar' : 'Mostrar';
-        }
-        
-        maskToggle?.addEventListener('click', handleMaskToggle);
-        mobileMaskToggle?.addEventListener('click', handleMaskToggle);
         
         // Historial
         const btnUndo = document.getElementById('btn-undo');
@@ -322,29 +292,21 @@
             if (window.innerWidth <= 768) toggleSidebar();
         };
 
-        // Handlers para botones de la BARRA FLOTANTE móvil (NO tocan el sidebar)
+        // Handlers para botones de la BARRA FLOTANTE móvil
         const handleMobileUndo = () => { editor.undo?.(); };
         const handleMobileRedo = () => { editor.redo?.(); };
 
         // Asignar listeners correctos
-        btnUndo?.addEventListener('click', handleSidebarUndo);   // Sidebar → cierra drawer
+        btnUndo?.addEventListener('click', handleSidebarUndo);   
         btnRedo?.addEventListener('click', handleSidebarRedo);
-        mobileUndo?.addEventListener('click', handleMobileUndo); // Floating bar → sin sidebar
+        mobileUndo?.addEventListener('click', handleMobileUndo); 
         mobileRedo?.addEventListener('click', handleMobileRedo);
 
         async function processImageAutomatically() {
             const state = editor.getState();
             if (!state.file) return;
             
-            const btnProcess = document.getElementById('btn-process');
-            const label = document.getElementById('btn-process-label');
-            const spinner = document.getElementById('btn-spinner');
             const statusBar = document.getElementById('status-bar');
-            
-            // UI: estado de procesamiento
-            if (btnProcess) btnProcess.disabled = true;
-            if (label) label.textContent = 'Procesando…';
-            if (spinner) spinner.classList.remove('hidden');
             if (statusBar) statusBar.textContent = 'procesando…';
             
             try {
@@ -369,10 +331,6 @@
                 console.error('Error:', err);
                 showToast('✗ ' + err.message);
                 if (statusBar) statusBar.textContent = 'error';
-            } finally {
-                if (btnProcess) btnProcess.disabled = false;
-                if (label) label.textContent = 'Eliminar fondo';
-                if (spinner) spinner.classList.add('hidden');
             }
         }
 
@@ -383,63 +341,6 @@
                 toast.classList.add('show');
                 setTimeout(() => toast.classList.remove('show'), 2500);
             }
-        }
-        
-        // Procesar imagen
-        const btnProcess = document.getElementById('btn-process');
-        if (btnProcess) {
-            btnProcess.addEventListener('click', async () => {
-                const state = editor.getState();
-                if (!state.file) return;
-                
-                const btn = btnProcess;
-                const label = document.getElementById('btn-process-label');
-                const spinner = document.getElementById('btn-spinner');
-                const statusBar = document.getElementById('status-bar');
-                
-                btn.disabled = true;
-                if (label) label.textContent = 'Procesando…';
-                if (spinner) spinner.classList.remove('hidden');
-                if (statusBar) statusBar.textContent = 'procesando…';
-                
-                try {
-                    const fd = new FormData();
-                    fd.append('file', state.file);
-                    
-                    const res = await fetch('/remove-bg', { method: 'POST', body: fd });
-                    const data = await res.json();
-                    
-                    if (!data.success) throw new Error(data.error);
-                    
-                    editor.setProcessedDataUrl(data.image);
-                    await editor.loadImage(data.image, true);
-                    
-                    const btnExport = document.getElementById('btn-export');
-                    if (btnExport) btnExport.disabled = false;
-                    if (statusBar) statusBar.textContent = 'listo';
-                    
-                    const toast = document.getElementById('toast');
-                    if (toast) {
-                        toast.textContent = '✓ Fondo eliminado';
-                        toast.classList.add('show');
-                        setTimeout(() => toast.classList.remove('show'), 2500);
-                    }
-                    
-                } catch (err) {
-                    console.error('Error:', err);
-                    const toast = document.getElementById('toast');
-                    if (toast) {
-                        toast.textContent = '✗ ' + err.message;
-                        toast.classList.add('show');
-                        setTimeout(() => toast.classList.remove('show'), 3000);
-                    }
-                    if (statusBar) statusBar.textContent = 'error';
-                } finally {
-                    btn.disabled = false;
-                    if (label) label.textContent = 'Eliminar fondo';
-                    if (spinner) spinner.classList.add('hidden');
-                }
-            });
         }
         
         // Exportar
@@ -490,31 +391,6 @@
                 }
                 
                 if (statusBar) statusBar.textContent = 'listo';
-            });
-        }
-        
-        // Reset
-        const btnReset = document.getElementById('btn-reset');
-        if (btnReset) {
-            btnReset.addEventListener('click', () => {
-                if (confirm('¿Resetear todo?')) {
-                    if (fileInput) fileInput.value = '';
-                    if (emptyState && canvasContainer) {
-                        emptyState.classList.remove('hidden');
-                        canvasContainer.classList.add('hidden');
-                    }
-                    const btnProcess = document.getElementById('btn-process');
-                    const btnExport = document.getElementById('btn-export');
-                    if (btnProcess) btnProcess.disabled = true;
-                    if (btnExport) btnExport.disabled = true;
-                    
-                    editor.reset();
-                    
-                    const statusBar = document.getElementById('status-bar');
-                    if (statusBar) statusBar.textContent = 'listo';
-                    
-                    if (window.innerWidth <= 768) toggleSidebar();
-                }
             });
         }
         
