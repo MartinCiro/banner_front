@@ -31,6 +31,7 @@ const MaskEditor = (function () {
     #isPanning = false;
     #lastPanX = 0;
     #lastPanY = 0;
+    #spacePressed = false;
 
     constructor(config) {
       if (!config?.originalCanvas || !config?.maskCanvas || !config?.mainCanvas) {
@@ -180,18 +181,23 @@ const MaskEditor = (function () {
     #screenToCanvas(clientX, clientY) {
       const rect = this.#canvas.main.getBoundingClientRect();
       
-      // Coordenadas relativas al elemento canvas transformado
-      const canvasRelativeX = (clientX - rect.left - this.#panX) / this.#zoom;
-      const canvasRelativeY = (clientY - rect.top - this.#panY) / this.#zoom;
+      // Coordenadas relativas al canvas visual
+      const relX = clientX - rect.left;
+      const relY = clientY - rect.top;
       
-      // Mapear a coordenadas de píxel real (0 a W/H)
-      const x = (canvasRelativeX / rect.width) * this.#state.W * this.#zoom;
-      const y = (canvasRelativeY / rect.height) * this.#state.H * this.#zoom;
+      // Validar bounds
+      if (relX < 0 || relX > rect.width || relY < 0 || relY > rect.height) {
+        return { x: -1, y: -1 };
+      }
       
-      // Limitar a los bordes de la imagen
-      return {
-        x: Math.max(0, Math.min(this.#state.W - 1, x)),
-        y: Math.max(0, Math.min(this.#state.H - 1, y))
+      // Normalizar 0-1 → coordenadas intrínsecas
+      // (funciona igual con cualquier transform-origin porque getBoundingClientRect ya incluye todo)
+      const x = (relX / rect.width) * this.#state.W;
+      const y = (relY / rect.height) * this.#state.H;
+      
+      return { 
+        x: Math.max(0, Math.min(this.#state.W - 1, Math.round(x))), 
+        y: Math.max(0, Math.min(this.#state.H - 1, Math.round(y))) 
       };
     }
 
@@ -237,6 +243,12 @@ const MaskEditor = (function () {
 
 
       handlers.mouseDown = (e) => {
+        // No iniciar pintura si es botón central o espacio presionado (modo pan)
+        if (e.button === 1 || e.button === 2) return;
+        
+        // Verificar si espacio está presionado (lo trackeamos con una propiedad)
+        if (this.#isPanning) return;
+        
         e.preventDefault();
         this.#state.painting = true;
         const pos = this.#screenToCanvas(e.clientX, e.clientY);
@@ -555,39 +567,47 @@ const MaskEditor = (function () {
       // Zoom con rueda del mouse
       const wheelHandler = (e) => {
         e.preventDefault();
-
         const rect = this.#canvas.main.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-
-        // Punto focal en coordenadas del canvas
-        const focalX = (mouseX - this.#panX) / this.#zoom;
-        const focalY = (mouseY - this.#panY) / this.#zoom;
-
+        
+        // Coordenadas del mouse RELATIVAS al centro del canvas visual
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const mouseX = e.clientX - rect.left - centerX;  // ← Relativo al centro
+        const mouseY = e.clientY - rect.top - centerY;
+        
+        // Mapear a coordenadas intrínsecas
+        const normX = (mouseX / rect.width) + 0.5; 
+        const normY = (mouseY / rect.height) + 0.5;
+        const canvasX = normX * this.#state.W;
+        const canvasY = normY * this.#state.H;
+        
         // Calcular nuevo zoom
         const delta = e.deltaY > 0 ? -this.#zoomStep : this.#zoomStep;
         const newZoom = Math.max(this.#minZoom, Math.min(this.#maxZoom, this.#zoom + delta));
-
-        if (newZoom !== this.#zoom) {
-          // Ajustar pan para mantener el punto focal
-          this.#panX = mouseX - focalX * newZoom;
-          this.#panY = mouseY - focalY * newZoom;
-          this.#zoom = newZoom;
-
-          this.#applyTransform();
-          this.#updateZoomUI();
-        }
+        
+        if (Math.abs(newZoom - this.#zoom) < 0.001) return;
+        
+        // El pan ajusta la posición del CENTRO del canvas
+        const currentScreenX = this.#panX + centerX + (canvasX - this.#state.W/2) * this.#zoom;
+        const currentScreenY = this.#panY + centerY + (canvasY - this.#state.H/2) * this.#zoom;
+        
+        this.#panX = currentScreenX - centerX - (canvasX - this.#state.W/2) * newZoom;
+        this.#panY = currentScreenY - centerY - (canvasY - this.#state.H/2) * newZoom;
+        
+        this.#zoom = newZoom;
+        this.#applyTransform();
+        this.#updateZoomUI();
       };
 
       // Pan con click medio o espacio + click
       const mouseDownHandler = (e) => {
-        // Pan con botón central (e.button === 1) o espacio + click izquierdo
-        if (e.button === 1 || (e.button === 0 && e.spaceKey)) {
+        if (e.button === 1 || (e.button === 0 && this.#spacePressed)) {
           e.preventDefault();
           this.#isPanning = true;
           this.#lastPanX = e.clientX;
           this.#lastPanY = e.clientY;
           container.classList.add('panning');
+          container.style.cursor = 'grabbing';
         }
       };
 
@@ -595,13 +615,13 @@ const MaskEditor = (function () {
         if (this.#isPanning) {
           const dx = e.clientX - this.#lastPanX;
           const dy = e.clientY - this.#lastPanY;
-
+          
           this.#panX += dx;
           this.#panY += dy;
-
+          
           this.#lastPanX = e.clientX;
           this.#lastPanY = e.clientY;
-
+          
           this.#applyTransform();
         }
       };
@@ -609,24 +629,26 @@ const MaskEditor = (function () {
       const mouseUpHandler = () => {
         this.#isPanning = false;
         container.classList.remove('panning');
+        container.style.cursor = this.#spacePressed ? 'grab' : '';
       };
 
       // Track de tecla espacio
       const keyDownHandler = (e) => {
         if (e.code === 'Space' && !e.target.matches('input, textarea')) {
           e.preventDefault();
-          e.spaceKey = true;
-          container.style.cursor = 'grab';
+          this.#spacePressed = true;
+          if (!this.#isPanning) {
+            container.style.cursor = 'grab';
+          }
         }
       };
 
       const keyUpHandler = (e) => {
         if (e.code === 'Space') {
           e.preventDefault();
-          e.spaceKey = false;
-          container.style.cursor = '';
+          this.#spacePressed = false;
           if (!this.#isPanning) {
-            container.classList.remove('panning');
+            container.style.cursor = '';
           }
         }
       };
@@ -654,6 +676,7 @@ const MaskEditor = (function () {
 
     #applyTransform() {
       this.#canvas.main.style.transform = `translate(${this.#panX}px, ${this.#panY}px) scale(${this.#zoom})`;
+      this.#canvas.main.style.transformOrigin = '50% 50%';  // ← Coincidir con CSS
     }
 
     #updateZoomUI() {
@@ -671,9 +694,18 @@ const MaskEditor = (function () {
 
     // Métodos públicos para zoom
     zoomIn() {
+      const rect = this.#canvas.main.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      
+      const focalX = (centerX - this.#panX) / this.#zoom;
+      const focalY = (centerY - this.#panY) / this.#zoom;
+      
       const newZoom = Math.min(this.#maxZoom, this.#zoom + this.#zoomStep);
       if (newZoom !== this.#zoom) {
         this.#zoom = newZoom;
+        this.#panX = centerX - focalX * this.#zoom;
+        this.#panY = centerY - focalY * this.#zoom;
         this.#applyTransform();
         this.#updateZoomUI();
       }
@@ -681,9 +713,18 @@ const MaskEditor = (function () {
     }
 
     zoomOut() {
+      const rect = this.#canvas.main.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      
+      const focalX = (centerX - this.#panX) / this.#zoom;
+      const focalY = (centerY - this.#panY) / this.#zoom;
+      
       const newZoom = Math.max(this.#minZoom, this.#zoom - this.#zoomStep);
       if (newZoom !== this.#zoom) {
         this.#zoom = newZoom;
+        this.#panX = centerX - focalX * this.#zoom;
+        this.#panY = centerY - focalY * this.#zoom;
         this.#applyTransform();
         this.#updateZoomUI();
       }
