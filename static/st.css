@@ -276,7 +276,27 @@ input[type=range]::-webkit-slider-thumb {
   padding: 0 12px;
 }
 
+#btn-replace-image {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
+#btn-replace-image:hover {
+  background: rgba(0, 200, 150, 0.1);
+  border-color: #00c896;
+  color: #00c896;
+}
+
+/* Animación de entrada */
+#btn-replace-image.fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 @media (max-width: 768px) {
   #brush-cursor {
@@ -339,6 +359,11 @@ input[type=range]::-webkit-slider-thumb {
     height: 44px;
   }
   
+  #btn-replace-image {
+    top: 72px;
+    right: 12px;
+    padding: 8px 12px;
+  }
 }
 
 @media (min-width: 769px) {

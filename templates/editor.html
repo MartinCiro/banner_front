@@ -64,19 +64,7 @@
       </div>
 
       <!-- Imagen -->
-      <section class="p-4 border-b border-white/5">
-        <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Imagen</p>
-
-        <div id="drop-zone"
-          class="p-4 text-center cursor-pointer border-2 border-dashed border-white/10 rounded-lg hover:border-accent/50 transition-colors">
-          <svg class="mx-auto mb-2 w-6 h-6 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-          </svg>
-          <p class="text-xs text-white/30">Toca para seleccionar</p>
-          <p class="text-xs text-white/15 mt-1">PNG · JPG · WEBP</p>
-        </div>
-
+      <section id="drop-zone" class="hidden">
         <input id="file-input" type="file" accept="image/*" class="hidden" />
       </section>
 
@@ -149,12 +137,19 @@
         <button id="zoom-reset" class="zoom-btn reset-zoom" title="Reset zoom">Reset</button>
       </div>
 
+      <button id="btn-replace-image" 
+              class="hidden fixed z-30 px-4 py-2 bg-dim/90 backdrop-blur-sm border border-white/10 rounded-lg text-xs font-mono text-white/80 hover:text-white hover:border-accent/50 transition-all shadow-lg touch-target"
+              style="top: 80px; right: 16px;"
+              title="Reemplazar imagen">
+        <span class="hidden sm:inline">🔄 Reemplazar imagen</span>
+        <span class="sm:hidden">🔄</span>
+      </button>
+
       <!-- Barra de herramientas flotante móvil -->
       <div class="mobile-only fixed bottom-4 left-4 right-4 z-10">
         <div
           class="bg-dim/90 backdrop-blur-sm rounded-xl border border-white/10 p-3 flex items-center justify-between gap-2">
           <button id="mobile-undo" class="btn btn-ghost touch-target px-3 py-2 text-xs" title="Deshacer">↩</button>
-          <button id="mobile-mask-toggle" class="btn btn-ghost touch-target px-3 py-2 text-xs flex-1">Máscara</button>
           <button id="mobile-redo" class="btn btn-ghost touch-target px-3 py-2 text-xs" title="Rehacer">↪</button>
         </div>
       </div>
@@ -175,10 +170,29 @@
       const canvasOriginal = document.getElementById('canvas-original');
       const canvasMask = document.getElementById('canvas-mask');
       const canvasMain = document.getElementById('canvas-main');
+      const btnReplace = document.getElementById('btn-replace-image');
+      const canvasWrap = document.getElementById('canvas-wrap');
+
+      // Drag & Drop / File input
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
 
       if (!canvasOriginal || !canvasMask || !canvasMain) return;
 
       const zoomControls = document.getElementById('zoom-controls');
+
+      function handleFile(file, isReplace = false) {
+        if (!file) return;
+        editor.loadImage(file, isReplace);
+        
+        // Resetear input para permitir seleccionar el mismo archivo nuevamente
+        fileInput.value = '';
+        
+        // Cerrar sidebar en móvil después de cargar
+        if (window.innerWidth <= 768 && sidebar?.classList.contains('open')) {
+          toggleSidebar();
+        }
+      }
 
 
       // Crear instancia del editor
@@ -205,6 +219,14 @@
             if (emptyState && canvasContainer) {
               emptyState.classList.add('hidden');
               canvasContainer.classList.remove('hidden');
+            }
+
+            // ✅ Mostrar botón de reemplazo cuando hay imagen
+            if (btnReplace) {
+              btnReplace.classList.remove('hidden');
+              btnReplace.classList.add('fade-in');
+              // Remover clase de animación después de ejecutar
+              setTimeout(() => btnReplace.classList.remove('fade-in'), 200);
             }
 
             if (!processed && editor.getState().file) processImageAutomatically();
@@ -239,9 +261,7 @@
       sidebarClose?.addEventListener('click', toggleSidebar);
       overlay?.addEventListener('click', toggleSidebar);
 
-      // Drag & Drop / File input
-      const dropZone = document.getElementById('drop-zone');
-      const fileInput = document.getElementById('file-input');
+      
 
       if (dropZone && fileInput) {
         dropZone.addEventListener('click', () => fileInput.click());
@@ -259,7 +279,7 @@
             e.preventDefault();
             e.stopPropagation();
             if (evt === 'drop' && e.dataTransfer?.files?.[0]) {
-              editor.loadImage(e.dataTransfer.files[0], false);
+              handleFile(e.dataTransfer.files[0], false);
             }
             dropZone.classList.remove('drag-over');
           });
@@ -267,8 +287,50 @@
 
         fileInput.addEventListener('change', (e) => {
           if (e.target.files?.[0]) {
-            editor.loadImage(e.target.files[0], false);
+            // Determinar si es reemplazo según si ya hay imagen cargada
+            const isReplace = !emptyState?.classList.contains('hidden');
+            handleFile(e.target.files[0], isReplace);
           }
+        });
+      }
+      if (emptyState && fileInput) {
+        emptyState.style.cursor = 'pointer'; // Cambia el cursor para indicar que es clickable
+        emptyState.addEventListener('click', () => {
+          fileInput.click();
+        });
+      }
+
+      if (canvasWrap) {
+        ['dragenter', 'dragover'].forEach(evt => {
+          canvasWrap.addEventListener(evt, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // Solo mostrar feedback visual si no hay imagen o si es para reemplazar
+            canvasContainer?.classList.add('drag-over-canvas');
+          });
+        });
+
+        ['dragleave', 'drop'].forEach(evt => {
+          canvasWrap.addEventListener(evt, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            canvasContainer?.classList.remove('drag-over-canvas');
+            
+            if (evt === 'drop' && e.dataTransfer?.files?.[0]) {
+              const file = e.dataTransfer.files[0];
+              if (file.type.startsWith('image/')) {
+                // Si ya hay imagen, es reemplazo; si no, es carga inicial
+                const hasImage = emptyState?.classList.contains('hidden');
+                handleFile(file, hasImage);
+              }
+            }
+          });
+        });
+      }
+
+      if (btnReplace) {
+        btnReplace.addEventListener('click', () => {
+          fileInput.click();
         });
       }
 
