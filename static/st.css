@@ -298,6 +298,62 @@ input[type=range]::-webkit-slider-thumb {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Animaciones para íconos de estado */
+#status-icon {
+  transition: all 0.2s ease;
+}
+
+#status-icon.check {
+  stroke: #00c896;
+  animation: popIn 0.3s ease;
+}
+
+#status-icon.spinner {
+  animation: spin 1s linear infinite;
+}
+
+#status-icon.error {
+  stroke: #ef4444;
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Botón de exportar en navbar */
+#btn-export-nav {
+  position: relative;
+}
+
+#btn-export-nav:hover:not(:disabled) {
+  color: #00c896;
+  transform: translateY(-1px);
+}
+
+#btn-export-nav:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* Tooltip simple para el botón de exportar */
+#btn-export-nav:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -32px;
+  right: 50%;
+  transform: translateX(50%);
+  background: #2a2a2a;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  z-index: 100;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
 @media (max-width: 768px) {
   #brush-cursor {
     display: none !important;
@@ -363,6 +419,13 @@ input[type=range]::-webkit-slider-thumb {
     top: 72px;
     right: 12px;
     padding: 8px 12px;
+  }
+
+  #btn-export-nav {
+    padding: 8px;
+  }
+  #btn-export-nav:hover::after {
+    display: none; /* Ocultar tooltip en móvil */
   }
 }
 

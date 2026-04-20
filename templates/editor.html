@@ -44,7 +44,28 @@
       <span class="text-sm font-semibold tracking-widest uppercase text-white/90">BG Remover</span>
       <span class="tag hidden sm:inline">FastAPI + rembg</span>
     </div>
-    <div id="status-bar" class="text-xs text-white/30">listo</div>
+    
+    <div class="flex items-center gap-3">
+      <!-- ✅ Botón de exportar (solo se muestra cuando hay modificaciones) -->
+      <button id="btn-export-nav" 
+              class="hidden touch-target p-2 rounded-lg text-white/50 hover:text-accent hover:bg-white/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              title="Guardar imagen (Ctrl+S)"
+              disabled>
+        <!-- Ícono de guardar/download -->
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
+      </button>
+      
+      <!-- ✅ Estado: ícono en lugar de texto "listo" -->
+      <div id="status-bar" class="flex items-center gap-1 text-xs text-white/30">
+        <!-- Ícono de estado: círculo vacío = listo, spinner = procesando, check = guardado -->
+        <svg id="status-icon" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="8" stroke-width="2" />
+        </svg>
+      </div>
+    </div>
   </header>
 
   <div class="flex h-[calc(100vh-57px)]">
@@ -98,12 +119,6 @@
           <button id="btn-undo" class="btn btn-ghost flex-1 text-xs touch-target" title="Ctrl+Z">↩</button>
           <button id="btn-redo" class="btn btn-ghost flex-1 text-xs touch-target" title="Ctrl+Y">↪</button>
         </div>
-      </section>
-
-      <!-- Exportar -->
-      <section class="p-4">
-        <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Exportar</p>
-        <button id="btn-export" class="btn btn-primary w-full text-xs touch-target mb-2" disabled>Descargar PNG</button>
       </section>
 
       <!-- Spacer para móvil -->
@@ -177,9 +192,21 @@
       const dropZone = document.getElementById('drop-zone');
       const fileInput = document.getElementById('file-input');
 
+      
       if (!canvasOriginal || !canvasMask || !canvasMain) return;
-
+      
       const zoomControls = document.getElementById('zoom-controls');
+      
+      const btnExportNav = document.getElementById('btn-export-nav');
+      const btnExport = document.getElementById('btn-export');
+      const statusIcon = document.getElementById('status-icon');
+      let hasModifications = false; // Track de modificaciones
+
+      // Toggle sidebar móvil
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      const menuToggle = document.getElementById('menu-toggle');
+      const sidebarClose = document.getElementById('sidebar-close');
 
       function handleFile(file, isReplace = false) {
         if (!file) return;
@@ -192,6 +219,60 @@
         if (window.innerWidth <= 768 && sidebar?.classList.contains('open')) {
           toggleSidebar();
         }
+      }
+
+      function updateExportButtonState() {
+        const state = editor?.getState();
+        const hasImage = state?.file || state?.processedDataUrl;
+        const isProcessed = state?.isProcessed;
+        
+        // Mostrar botón solo si hay imagen Y (está procesada O hay modificaciones en máscara)
+        const shouldShow = hasImage && (isProcessed || hasModifications);
+        
+        if (btnExportNav) {
+          btnExportNav.classList.toggle('hidden', !shouldShow);
+          btnExportNav.disabled = !isProcessed;
+        }
+      }
+
+      function updateStatusIcon(status) {
+        if (!statusIcon) return;
+        
+        // Resetear clases
+        statusIcon.classList.remove('check', 'spinner', 'error');
+        statusIcon.innerHTML = '';
+        
+        switch(status) {
+          case 'ready':
+            statusIcon.innerHTML = '<circle cx="12" cy="12" r="8" stroke-width="2" />';
+            break;
+          case 'processing':
+            statusIcon.classList.add('spinner');
+            statusIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />';
+            break;
+          case 'saved':
+            statusIcon.classList.add('check');
+            statusIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />';
+            // Volver a "ready" después de 2 segundos
+            setTimeout(() => updateStatusIcon('ready'), 2000);
+            break;
+          case 'error':
+            statusIcon.classList.add('error');
+            statusIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />';
+            setTimeout(() => updateStatusIcon('ready'), 3000);
+            break;
+        }
+      }
+
+      function markAsModified() {
+        hasModifications = true;
+        updateExportButtonState();
+      }
+
+      function toggleSidebar() {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('active');
+        document.body.style.overflow = sidebar.classList.contains('open') ? 'hidden' : '';
       }
 
 
@@ -212,8 +293,6 @@
           onImageReady: (processed) => {
             // ✅ Mostrar controles de zoom
             if (zoomControls) zoomControls.classList.remove('hidden');
-
-            const btnExport = document.getElementById('btn-export');
             if (btnExport) btnExport.disabled = !processed;
 
             if (emptyState && canvasContainer) {
@@ -241,21 +320,29 @@
         }
       });
 
-      window.editor = editor;
-
-      // Toggle sidebar móvil
-      const sidebar = document.getElementById('sidebar');
-      const overlay = document.getElementById('sidebar-overlay');
-      const menuToggle = document.getElementById('menu-toggle');
-      const sidebarClose = document.getElementById('sidebar-close');
-
-
-
-      function toggleSidebar() {
-        sidebar.classList.toggle('open');
-        overlay.classList.toggle('active');
-        document.body.style.overflow = sidebar.classList.contains('open') ? 'hidden' : '';
+      if (canvasMain) {
+        let isDrawing = false;
+        
+        const startDraw = () => { isDrawing = true; };
+        const endDraw = () => { 
+          if (isDrawing) {
+            isDrawing = false;
+            markAsModified(); 
+          }
+        };
+        
+        // Eventos para mouse
+        canvasMain.addEventListener('mousedown', startDraw);
+        canvasMain.addEventListener('mouseup', endDraw);
+        canvasMain.addEventListener('mouseleave', endDraw);
+        
+        // Eventos para touch (móvil)
+        canvasMain.addEventListener('touchstart', startDraw, { passive: false });
+        canvasMain.addEventListener('touchend', endDraw);
+        canvasMain.addEventListener('touchcancel', endDraw);
       }
+      
+      window.editor = editor;
 
       menuToggle?.addEventListener('click', toggleSidebar);
       sidebarClose?.addEventListener('click', toggleSidebar);
@@ -367,17 +454,25 @@
 
       const handleSidebarUndo = () => {
         editor.undo?.();
+        markAsModified(); 
         if (window.innerWidth <= 768) toggleSidebar(); // Cierra sidebar después de acción
       };
 
       const handleSidebarRedo = () => {
         editor.redo?.();
+        markAsModified(); 
         if (window.innerWidth <= 768) toggleSidebar();
       };
 
       // Handlers para botones de la BARRA FLOTANTE móvil
-      const handleMobileUndo = () => { editor.undo?.(); };
-      const handleMobileRedo = () => { editor.redo?.(); };
+      const handleMobileUndo = () => { 
+        editor.undo?.(); 
+        markAsModified(); 
+      };
+      const handleMobileRedo = () => { 
+        editor.redo?.(); 
+        markAsModified(); 
+      };
 
       // Asignar listeners correctos
       btnUndo?.addEventListener('click', handleSidebarUndo);
@@ -389,8 +484,7 @@
         const state = editor.getState();
         if (!state.file) return;
 
-        const statusBar = document.getElementById('status-bar');
-        if (statusBar) statusBar.textContent = 'procesando…';
+        updateStatusIcon('processing');
 
         try {
           const fd = new FormData();
@@ -403,17 +497,21 @@
 
           editor.setProcessedDataUrl(data.image);
           await editor.loadImage(data.image, true);
-
-          const btnExport = document.getElementById('btn-export');
           if (btnExport) btnExport.disabled = false;
-          if (statusBar) statusBar.textContent = 'listo';
+          
 
+          // ✅ Actualizar ícono a "listo"
+          updateStatusIcon('ready');
+          
+          // ✅ Actualizar botón de exportar
+          updateExportButtonState();
+          
           showToast('✓ Fondo eliminado');
 
         } catch (err) {
           console.error('Error:', err);
           showToast('✗ ' + err.message);
-          if (statusBar) statusBar.textContent = 'error';
+          updateStatusIcon('error'); 
         }
       }
 
@@ -426,54 +524,60 @@
         }
       }
 
-      // Exportar
-      const btnExport = document.getElementById('btn-export');
-      if (btnExport) {
-        btnExport.addEventListener('click', async () => {
-          const state = editor.getState();
-          if (!state.isProcessed) return;
+      // ✅ Función centralizada de exportación (fuera de cualquier listener)
+      async function handleExport() {
+        const state = editor.getState();
+        if (!state.isProcessed) return;
 
-          const statusBar = document.getElementById('status-bar');
-          if (statusBar) statusBar.textContent = 'exportando…';
+        updateStatusIcon('processing');  // ✅ Usar ícono, no texto
 
-          try {
-            const res = await fetch('/apply-mask', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                original: state.processedDataUrl,
-                mask: editor.getMaskDataUrl()
-              })
-            });
-            const data = await res.json();
+        try {
+          const res = await fetch('/apply-mask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              original: state.processedDataUrl,
+              mask: editor.getMaskDataUrl()
+            })
+          });
+          const data = await res.json();
 
-            if (data.success && data.image) {
-              const a = document.createElement('a');
-              a.href = data.image;
-              a.download = 'sin_fondo.png';
-              a.click();
+          if (data.success && data.image) {
+            const a = document.createElement('a');
+            a.href = data.image;
+            a.download = 'sin_fondo.png';
+            a.click();
 
-              const toast = document.getElementById('toast');
-              if (toast) {
-                toast.textContent = '✓ PNG descargado';
-                toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 2500);
-              }
-            } else {
-              throw new Error(data.error || 'Error desconocido');
-            }
-          } catch (err) {
-            console.error('Error exportando:', err);
-            const compositeUrl = editor.getCompositeDataUrl();
-            if (compositeUrl) {
-              const a = document.createElement('a');
-              a.href = compositeUrl;
-              a.download = 'sin_fondo_local.png';
-              a.click();
-            }
+            showToast('✓ PNG descargado');
+            updateStatusIcon('saved');  // ✅ Ícono de check verde
+            
+            // Resetear modificaciones después de guardar exitosamente
+            hasModifications = false;
+            updateExportButtonState();
+          } else {
+            throw new Error(data.error || 'Error desconocido');
           }
+        } catch (err) {
+          console.error('Error exportando:', err);
+          updateStatusIcon('error');  // ✅ Ícono de error
+          
+          // Fallback: descarga local desde canvas
+          const compositeUrl = editor.getCompositeDataUrl();
+          if (compositeUrl) {
+            const a = document.createElement('a');
+            a.href = compositeUrl;
+            a.download = 'sin_fondo_local.png';
+            a.click();
+            showToast('✓ Descarga local (fallback)');
+          }
+        }
+      }
 
-          if (statusBar) statusBar.textContent = 'listo';
+      // Exportar
+      if (btnExport) {
+        btnExport.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await handleExport();  
         });
       }
       document.getElementById('zoom-in')?.addEventListener('click', () => editor.zoomIn());
@@ -507,6 +611,13 @@
           }
         }
       });
+
+      if (btnExportNav) {
+        btnExportNav.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await handleExport();
+        });
+      }
 
       // Cleanup
       window.addEventListener('beforeunload', () => editor.destroy());
