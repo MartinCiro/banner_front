@@ -26,41 +26,26 @@
     class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded text-sm font-mono bg-dim border border-white/10 max-w-[90vw] text-center">
   </div>
 
-  <!-- Overlay para sidebar móvil -->
-  <div id="sidebar-overlay"></div>
-
   <!-- Header -->
   <header
     class="border-b border-white/5 px-4 py-3 flex items-center justify-between sticky top-0 bg-ink/95 backdrop-blur-sm z-20">
     <div class="flex items-center gap-3">
-      <!-- Botón menú móvil -->
-      <button id="menu-toggle" class="mobile-only touch-target p-2 -ml-2 text-white/70 hover:text-white">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-
       <div class="w-2 h-2 rounded-full bg-accent"></div>
       <span class="text-sm font-semibold tracking-widest uppercase text-white/90">BG Remover</span>
       <span class="tag hidden sm:inline">FastAPI + rembg</span>
     </div>
-    
+
     <div class="flex items-center gap-3">
-      <!-- ✅ Botón de exportar (solo se muestra cuando hay modificaciones) -->
-      <button id="btn-export-nav" 
-              class="hidden touch-target p-2 rounded-lg text-white/50 hover:text-accent hover:bg-white/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Guardar imagen (Ctrl+S)"
-              disabled>
-        <!-- Ícono de guardar/download -->
+      <button id="btn-export-nav"
+        class="hidden touch-target p-2 rounded-lg text-white/50 hover:text-accent hover:bg-white/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+        title="Guardar imagen (Ctrl+S)" disabled>
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
         </svg>
       </button>
-      
-      <!-- ✅ Estado: ícono en lugar de texto "listo" -->
+
       <div id="status-bar" class="flex items-center gap-1 text-xs text-white/30">
-        <!-- Ícono de estado: círculo vacío = listo, spinner = procesando, check = guardado -->
         <svg id="status-icon" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="8" stroke-width="2" />
         </svg>
@@ -69,63 +54,7 @@
   </header>
 
   <div class="flex h-[calc(100vh-57px)]">
-
-    <!-- ── Sidebar (Drawer en móvil) ── -->
-    <aside id="sidebar"
-      class="w-64 border-r border-white/5 flex flex-col overflow-y-auto shrink-0 bg-ink fixed md:static h-full md:h-auto">
-
-      <!-- Header del sidebar móvil -->
-      <div class="mobile-only flex items-center justify-between p-4 border-b border-white/5">
-        <span class="text-sm font-semibold text-white/90">Herramientas</span>
-        <button id="sidebar-close" class="touch-target p-2 text-white/50 hover:text-white">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Imagen -->
-      <section id="drop-zone" class="hidden">
-        <input id="file-input" type="file" accept="image/*" class="hidden" />
-      </section>
-
-      <!-- Pincel -->
-      <section class="p-4 border-b border-white/5">
-        <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Refinar máscara</p>
-
-        <div class="flex gap-2 mb-4">
-          <button id="tool-add" class="btn btn-ghost flex-1 text-xs touch-target" title="Atajo: A">
-            <span class="hidden sm:inline">+ Añadir</span>
-            <span class="sm:hidden">+</span>
-            <span class="kbd hidden sm:inline">A</span>
-          </button>
-          <button id="tool-erase" class="btn btn-ghost flex-1 text-xs touch-target" title="Atajo: E">
-            <span class="hidden sm:inline">− Borrar</span>
-            <span class="sm:hidden">−</span>
-            <span class="kbd hidden sm:inline">E</span>
-          </button>
-        </div>
-
-        <label class="text-xs text-white/40 mb-1 block">
-          Tamaño: <span id="brush-size-label">30</span>px
-        </label>
-        <input id="brush-size" type="range" min="10" max="100" value="30" step="10" class="w-full accent-accent" />
-      </section>
-
-      <!-- Historial -->
-      <section class="p-4 border-b border-white/5">
-        <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Historial</p>
-        <div class="flex gap-2">
-          <button id="btn-undo" class="btn btn-ghost flex-1 text-xs touch-target" title="Ctrl+Z">↩</button>
-          <button id="btn-redo" class="btn btn-ghost flex-1 text-xs touch-target" title="Ctrl+Y">↪</button>
-        </div>
-      </section>
-
-      <!-- Spacer para móvil -->
-      <div class="mobile-only h-20"></div>
-    </aside>
-
-    <!-- ── Canvas ── -->
+    <!-- Contenedor principal (sin sidebar) -->
     <main class="flex-1 flex items-center justify-center p-2 sm:p-6 overflow-hidden relative" id="canvas-wrap">
       <!-- Estado vacío -->
       <div id="empty-state" class="text-center px-4">
@@ -145,6 +74,7 @@
         <canvas id="canvas-mask" class="hidden"></canvas>
       </div>
 
+      <!-- Controles de zoom -->
       <div id="zoom-controls" class="zoom-controls hidden">
         <button id="zoom-out" class="zoom-btn" title="Zoom out (-)">−</button>
         <span id="zoom-level" class="zoom-level">100%</span>
@@ -152,31 +82,79 @@
         <button id="zoom-reset" class="zoom-btn reset-zoom" title="Reset zoom">Reset</button>
       </div>
 
-      <button id="btn-replace-image" 
-              class="hidden fixed z-30 px-4 py-2 bg-dim/90 backdrop-blur-sm border border-white/10 rounded-lg text-xs font-mono text-white/80 hover:text-white hover:border-accent/50 transition-all shadow-lg touch-target"
-              style="top: 80px; right: 16px;"
-              title="Reemplazar imagen">
+      <!-- Botón reemplazar imagen -->
+      <button id="btn-replace-image"
+        class="hidden fixed z-30 px-4 py-2 bg-dim/90 backdrop-blur-sm border border-white/10 rounded-lg text-xs font-mono text-white/80 hover:text-white hover:border-accent/50 transition-all shadow-lg touch-target"
+        style="top: 80px; right: 16px;" title="Reemplazar imagen">
         <span class="hidden sm:inline">🔄 Reemplazar imagen</span>
         <span class="sm:hidden">🔄</span>
       </button>
 
-      <!-- Barra de herramientas flotante móvil -->
+      <!-- Controles flotantes de pincel (solo desktop) -->
+      <div id="brush-controls-floating"
+        class="hidden fixed z-30 flex flex-col gap-2 bg-dim/90 backdrop-blur-sm border border-white/10 rounded-lg p-3 shadow-lg"
+        style="top: 130px; right: 16px; min-width: 180px;">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-mono text-white/60">Pincel</span>
+          <span class="text-xs font-mono text-accent" id="brush-size-label-float">30px</span>
+        </div>
+        <input id="brush-size-float" type="range" min="10" max="100" value="30" step="10"
+          class="w-full accent-accent cursor-pointer" />
+        <div class="flex gap-1">
+          <button id="tool-add-float" class="btn btn-ghost flex-1 text-[10px] py-1 px-2" title="Añadir (A)">
+            + Añadir
+          </button>
+          <button id="tool-erase-float" class="btn btn-ghost flex-1 text-[10px] py-1 px-2" title="Borrar (E)">
+            − Borrar
+          </button>
+        </div>
+        <!-- Historial (desktop) -->
+        <section class="p-4 border-b border-white/5">
+          <p class="text-xs text-white/40 uppercase tracking-widest mb-3">Historial</p>
+          <div class="flex gap-2">
+            <button id="btn-undo" class="btn btn-ghost flex-1 text-xs touch-target" title="Ctrl+Z">↩</button>
+            <button id="btn-redo" class="btn btn-ghost flex-1 text-xs touch-target" title="Ctrl+Y">↪</button>
+          </div>
+        </section>
+      </div>
+
+      <!-- Barra de herramientas flotante móvil (5 elementos) -->
       <div class="mobile-only fixed bottom-4 left-4 right-4 z-10">
-        <div
-          class="bg-dim/90 backdrop-blur-sm rounded-xl border border-white/10 p-3 flex items-center justify-between gap-2">
-          <button id="mobile-undo" class="btn btn-ghost touch-target px-3 py-2 text-xs" title="Deshacer">↩</button>
-          <button id="mobile-redo" class="btn btn-ghost touch-target px-3 py-2 text-xs" title="Rehacer">↪</button>
+        <div class="bg-dim/90 backdrop-blur-sm rounded-xl border border-white/10 p-2 flex items-center gap-2">
+          <button id="mobile-undo"
+            class="btn btn-ghost touch-target w-10 h-10 p-0 flex items-center justify-center text-lg"
+            title="Deshacer">↩</button>
+          <button id="mobile-tool-add"
+            class="btn btn-ghost touch-target w-10 h-10 p-0 flex items-center justify-center text-lg font-bold"
+            title="Añadir">+</button>
+          <div class="flex-1 flex items-center gap-2">
+            <input id="mobile-brush-size" type="range" min="10" max="100" value="30" step="10"
+              class="flex-1 accent-accent cursor-pointer" />
+            <span id="mobile-brush-label" class="text-xs font-mono text-accent min-w-[35px] text-center">30px</span>
+          </div>
+          <button id="mobile-tool-erase"
+            class="btn btn-ghost touch-target w-10 h-10 p-0 flex items-center justify-center text-lg font-bold"
+            title="Borrar">−</button>
+          <button id="mobile-redo"
+            class="btn btn-ghost touch-target w-10 h-10 p-0 flex items-center justify-center text-lg"
+            title="Rehacer">↪</button>
         </div>
       </div>
+
+      <!-- Cursor del pincel (solo desktop) -->
       <div id="brush-cursor" class="pointer-events-none fixed z-50 hidden md:block"
         style="border: 2px solid #00c896; border-radius: 50%; transform: translate(-50%, -50%); mix-blend-mode: difference;">
       </div>
     </main>
   </div>
 
+  <!-- Elementos ocultos para carga de archivos (drag & drop programático) -->
+  <div id="drop-zone" class="hidden">
+    <input id="file-input" type="file" accept="image/*" class="hidden" />
+  </div>
+
   <script src="/static/a.js"></script>
 
-  <!-- INICIALIZACIÓN Y EVENT LISTENERS -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       // Referencias DOM
@@ -187,37 +165,54 @@
       const canvasMain = document.getElementById('canvas-main');
       const btnReplace = document.getElementById('btn-replace-image');
       const canvasWrap = document.getElementById('canvas-wrap');
+      const brushControlsFloat = document.getElementById('brush-controls-floating');
+      const brushSizeFloat = document.getElementById('brush-size-float');
+      const brushSizeLabelFloat = document.getElementById('brush-size-label-float');
+      const toolAddFloat = document.getElementById('tool-add-float');
+      const toolEraseFloat = document.getElementById('tool-erase-float');
 
-      // Drag & Drop / File input
+      // Móvil
+      const mobileBrushSize = document.getElementById('mobile-brush-size');
+      const mobileBrushLabel = document.getElementById('mobile-brush-label');
+      const mobileToolAdd = document.getElementById('mobile-tool-add');
+      const mobileToolErase = document.getElementById('mobile-tool-erase');
+
       const dropZone = document.getElementById('drop-zone');
       const fileInput = document.getElementById('file-input');
 
-      
       if (!canvasOriginal || !canvasMask || !canvasMain) return;
-      
+
       const zoomControls = document.getElementById('zoom-controls');
-      
       const btnExportNav = document.getElementById('btn-export-nav');
       const btnExport = document.getElementById('btn-export');
       const statusIcon = document.getElementById('status-icon');
-      let hasModifications = false; // Track de modificaciones
 
-      // Toggle sidebar móvil
-      const sidebar = document.getElementById('sidebar');
-      const overlay = document.getElementById('sidebar-overlay');
-      const menuToggle = document.getElementById('menu-toggle');
-      const sidebarClose = document.getElementById('sidebar-close');
+      // Historial (desktop y móvil)
+      const btnUndo = document.getElementById('btn-undo');
+      const btnRedo = document.getElementById('btn-redo');
+      const mobileUndo = document.getElementById('mobile-undo');
+      const mobileRedo = document.getElementById('mobile-redo');
+
+      const handleUndo = () => { editor.undo?.(); markAsModified(); };
+      const handleRedo = () => { editor.redo?.(); markAsModified(); };
+
+      let hasModifications = false;
 
       function handleFile(file, isReplace = false) {
         if (!file) return;
         editor.loadImage(file, isReplace);
-        
-        // Resetear input para permitir seleccionar el mismo archivo nuevamente
         fileInput.value = '';
-        
-        // Cerrar sidebar en móvil después de cargar
-        if (window.innerWidth <= 768 && sidebar?.classList.contains('open')) {
-          toggleSidebar();
+      }
+
+      function updateFloatingControls() {
+        const state = editor?.getState();
+        const hasImage = state?.file || state?.processedDataUrl;
+        if (brushControlsFloat && window.innerWidth > 768) {
+          brushControlsFloat.classList.toggle('hidden', !hasImage);
+          if (hasImage) {
+            brushControlsFloat.classList.add('fade-in');
+            setTimeout(() => brushControlsFloat.classList.remove('fade-in'), 200);
+          }
         }
       }
 
@@ -225,10 +220,7 @@
         const state = editor?.getState();
         const hasImage = state?.file || state?.processedDataUrl;
         const isProcessed = state?.isProcessed;
-        
-        // Mostrar botón solo si hay imagen Y (está procesada O hay modificaciones en máscara)
         const shouldShow = hasImage && (isProcessed || hasModifications);
-        
         if (btnExportNav) {
           btnExportNav.classList.toggle('hidden', !shouldShow);
           btnExportNav.disabled = !isProcessed;
@@ -237,12 +229,9 @@
 
       function updateStatusIcon(status) {
         if (!statusIcon) return;
-        
-        // Resetear clases
         statusIcon.classList.remove('check', 'spinner', 'error');
         statusIcon.innerHTML = '';
-        
-        switch(status) {
+        switch (status) {
           case 'ready':
             statusIcon.innerHTML = '<circle cx="12" cy="12" r="8" stroke-width="2" />';
             break;
@@ -253,7 +242,6 @@
           case 'saved':
             statusIcon.classList.add('check');
             statusIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />';
-            // Volver a "ready" después de 2 segundos
             setTimeout(() => updateStatusIcon('ready'), 2000);
             break;
           case 'error':
@@ -269,12 +257,78 @@
         updateExportButtonState();
       }
 
-      function toggleSidebar() {
-        sidebar.classList.toggle('open');
-        overlay.classList.toggle('active');
-        document.body.style.overflow = sidebar.classList.contains('open') ? 'hidden' : '';
+      // Procesamiento automático de fondo
+      async function processImageAutomatically() {
+        const state = editor.getState();
+        if (!state.file) return;
+        updateStatusIcon('processing');
+        try {
+          const fd = new FormData();
+          fd.append('file', state.file);
+          const res = await fetch('/remove-bg', { method: 'POST', body: fd });
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error);
+          editor.setProcessedDataUrl(data.image);
+          await editor.loadImage(data.image, true);
+          if (btnExport) btnExport.disabled = false;
+          updateStatusIcon('ready');
+          updateExportButtonState();
+          showToast('✓ Fondo eliminado');
+        } catch (err) {
+          console.error(err);
+          showToast('✗ ' + err.message);
+          updateStatusIcon('error');
+        }
       }
 
+      function showToast(message) {
+        const toast = document.getElementById('toast');
+        if (toast) {
+          toast.textContent = message;
+          toast.classList.add('show');
+          setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+      }
+
+      async function handleExport() {
+        const state = editor.getState();
+        if (!state.isProcessed) return;
+        updateStatusIcon('processing');
+        try {
+          const res = await fetch('/apply-mask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              original: state.processedDataUrl,
+              mask: editor.getMaskDataUrl()
+            })
+          });
+          const data = await res.json();
+          if (data.success && data.image) {
+            const a = document.createElement('a');
+            a.href = data.image;
+            a.download = 'sin_fondo.png';
+            a.click();
+            showToast('✓ PNG descargado');
+            updateStatusIcon('saved');
+            hasModifications = false;
+            updateExportButtonState();
+          } else {
+            throw new Error(data.error || 'Error desconocido');
+          }
+        } catch (err) {
+          console.error(err);
+          updateStatusIcon('error');
+          const compositeUrl = editor.getCompositeDataUrl();
+          if (compositeUrl) {
+            const a = document.createElement('a');
+            a.href = compositeUrl;
+            a.download = 'sin_fondo_local.png';
+            a.click();
+            showToast('✓ Descarga local (fallback)');
+          }
+        }
+      }
 
       // Crear instancia del editor
       const editor = MaskEditor.create({
@@ -283,76 +337,63 @@
         mainCanvas: canvasMain,
         callbacks: {
           onToolChange: (tool) => {
-            const addBtn = document.getElementById('tool-add');
-            const eraseBtn = document.getElementById('tool-erase');
-            if (addBtn && eraseBtn) {
-              addBtn.classList.toggle('btn-active', tool === 'add');
-              eraseBtn.classList.toggle('btn-active', tool === 'erase');
+            // Solo actualizamos botones flotantes y móviles
+            if (toolAddFloat && toolEraseFloat) {
+              toolAddFloat.classList.toggle('btn-active', tool === 'add');
+              toolEraseFloat.classList.toggle('btn-active', tool === 'erase');
+            }
+            if (mobileToolAdd && mobileToolErase) {
+              mobileToolAdd.classList.toggle('btn-active', tool === 'add');
+              mobileToolErase.classList.toggle('btn-active', tool === 'erase');
             }
           },
           onImageReady: (processed) => {
-            // ✅ Mostrar controles de zoom
             if (zoomControls) zoomControls.classList.remove('hidden');
             if (btnExport) btnExport.disabled = !processed;
-
             if (emptyState && canvasContainer) {
               emptyState.classList.add('hidden');
               canvasContainer.classList.remove('hidden');
             }
-
-            // ✅ Mostrar botón de reemplazo cuando hay imagen
             if (btnReplace) {
               btnReplace.classList.remove('hidden');
               btnReplace.classList.add('fade-in');
-              // Remover clase de animación después de ejecutar
               setTimeout(() => btnReplace.classList.remove('fade-in'), 200);
             }
-
+            updateFloatingControls();
             if (!processed && editor.getState().file) processImageAutomatically();
           },
           onBrushChange: (size) => {
-            const brushInput = document.getElementById('brush-size');
-            if (brushInput && document.activeElement !== brushInput) {
-              const label = document.getElementById('brush-size-label');
-              if (label) label.textContent = size;
-            }
-          },
+            // Sincronizar etiquetas si existen
+            const labelFloat = document.getElementById('brush-size-label-float');
+            if (labelFloat) labelFloat.textContent = `${size}px`;
+            const mobileLabel = document.getElementById('mobile-brush-label');
+            if (mobileLabel) mobileLabel.textContent = `${size}px`;
+          }
         }
       });
 
       if (canvasMain) {
         let isDrawing = false;
-        
         const startDraw = () => { isDrawing = true; };
-        const endDraw = () => { 
+        const endDraw = () => {
           if (isDrawing) {
             isDrawing = false;
-            markAsModified(); 
+            markAsModified();
           }
         };
-        
-        // Eventos para mouse
         canvasMain.addEventListener('mousedown', startDraw);
         canvasMain.addEventListener('mouseup', endDraw);
         canvasMain.addEventListener('mouseleave', endDraw);
-        
-        // Eventos para touch (móvil)
         canvasMain.addEventListener('touchstart', startDraw, { passive: false });
         canvasMain.addEventListener('touchend', endDraw);
         canvasMain.addEventListener('touchcancel', endDraw);
       }
-      
+
       window.editor = editor;
 
-      menuToggle?.addEventListener('click', toggleSidebar);
-      sidebarClose?.addEventListener('click', toggleSidebar);
-      overlay?.addEventListener('click', toggleSidebar);
-
-      
-
+      // Drag & drop / file input
       if (dropZone && fileInput) {
         dropZone.addEventListener('click', () => fileInput.click());
-
         ['dragenter', 'dragover'].forEach(evt => {
           dropZone.addEventListener(evt, (e) => {
             e.preventDefault();
@@ -360,7 +401,6 @@
             dropZone.classList.add('drag-over');
           });
         });
-
         ['dragleave', 'drop'].forEach(evt => {
           dropZone.addEventListener(evt, (e) => {
             e.preventDefault();
@@ -371,17 +411,16 @@
             dropZone.classList.remove('drag-over');
           });
         });
-
         fileInput.addEventListener('change', (e) => {
           if (e.target.files?.[0]) {
-            // Determinar si es reemplazo según si ya hay imagen cargada
             const isReplace = !emptyState?.classList.contains('hidden');
             handleFile(e.target.files[0], isReplace);
           }
         });
       }
+
       if (emptyState && fileInput) {
-        emptyState.style.cursor = 'pointer'; // Cambia el cursor para indicar que es clickable
+        emptyState.style.cursor = 'pointer';
         emptyState.addEventListener('click', () => {
           fileInput.click();
         });
@@ -392,21 +431,17 @@
           canvasWrap.addEventListener(evt, (e) => {
             e.preventDefault();
             e.stopPropagation();
-            // Solo mostrar feedback visual si no hay imagen o si es para reemplazar
             canvasContainer?.classList.add('drag-over-canvas');
           });
         });
-
         ['dragleave', 'drop'].forEach(evt => {
           canvasWrap.addEventListener(evt, (e) => {
             e.preventDefault();
             e.stopPropagation();
             canvasContainer?.classList.remove('drag-over-canvas');
-            
             if (evt === 'drop' && e.dataTransfer?.files?.[0]) {
               const file = e.dataTransfer.files[0];
               if (file.type.startsWith('image/')) {
-                // Si ya hay imagen, es reemplazo; si no, es carga inicial
                 const hasImage = emptyState?.classList.contains('hidden');
                 handleFile(file, hasImage);
               }
@@ -421,197 +456,64 @@
         });
       }
 
-      // Botones de herramienta
-      const toolAdd = document.getElementById('tool-add');
-      const toolErase = document.getElementById('tool-erase');
-
-      toolAdd?.addEventListener('click', () => {
-        if (editor.getState().tool !== 'add') editor.toggleTool();
-        if (window.innerWidth <= 768) toggleSidebar();
-      });
-      toolErase?.addEventListener('click', () => {
-        if (editor.getState().tool !== 'erase') editor.toggleTool();
-        if (window.innerWidth <= 768) toggleSidebar();
-      });
-
-      // Controles de pincel
-      const brushSize = document.getElementById('brush-size');
-
-      if (brushSize) {
-        brushSize.addEventListener('input', (e) => {
+      // Controles de pincel flotantes
+      if (brushSizeFloat) {
+        brushSizeFloat.addEventListener('input', (e) => {
           const val = parseInt(e.target.value);
-          editor.setBrushSize(val);  // ← Esto es lo que realmente cambia el pincel
-          const label = document.getElementById('brush-size-label');
-          if (label) label.textContent = val;
+          editor.setBrushSize(val);
+          if (brushSizeLabelFloat) brushSizeLabelFloat.textContent = `${val}px`;
+          const mobileSlider = document.getElementById('mobile-brush-size');
+          if (mobileSlider) mobileSlider.value = val;
         });
       }
 
-      // Historial
-      const btnUndo = document.getElementById('btn-undo');
-      const btnRedo = document.getElementById('btn-redo');
-      const mobileUndo = document.getElementById('mobile-undo');
-      const mobileRedo = document.getElementById('mobile-redo');
-
-      const handleSidebarUndo = () => {
-        editor.undo?.();
-        markAsModified(); 
-        if (window.innerWidth <= 768) toggleSidebar(); // Cierra sidebar después de acción
-      };
-
-      const handleSidebarRedo = () => {
-        editor.redo?.();
-        markAsModified(); 
-        if (window.innerWidth <= 768) toggleSidebar();
-      };
-
-      // Handlers para botones de la BARRA FLOTANTE móvil
-      const handleMobileUndo = () => { 
-        editor.undo?.(); 
-        markAsModified(); 
-      };
-      const handleMobileRedo = () => { 
-        editor.redo?.(); 
-        markAsModified(); 
-      };
-
-      // Asignar listeners correctos
-      btnUndo?.addEventListener('click', handleSidebarUndo);
-      btnRedo?.addEventListener('click', handleSidebarRedo);
-      mobileUndo?.addEventListener('click', handleMobileUndo);
-      mobileRedo?.addEventListener('click', handleMobileRedo);
-
-      async function processImageAutomatically() {
-        const state = editor.getState();
-        if (!state.file) return;
-
-        updateStatusIcon('processing');
-
-        try {
-          const fd = new FormData();
-          fd.append('file', state.file);
-
-          const res = await fetch('/remove-bg', { method: 'POST', body: fd });
-          const data = await res.json();
-
-          if (!data.success) throw new Error(data.error);
-
-          editor.setProcessedDataUrl(data.image);
-          await editor.loadImage(data.image, true);
-          if (btnExport) btnExport.disabled = false;
-          
-
-          // ✅ Actualizar ícono a "listo"
-          updateStatusIcon('ready');
-          
-          // ✅ Actualizar botón de exportar
-          updateExportButtonState();
-          
-          showToast('✓ Fondo eliminado');
-
-        } catch (err) {
-          console.error('Error:', err);
-          showToast('✗ ' + err.message);
-          updateStatusIcon('error'); 
-        }
+      // Controles móviles
+      if (mobileBrushSize && mobileBrushLabel) {
+        mobileBrushSize.addEventListener('input', (e) => {
+          const val = parseInt(e.target.value);
+          editor.setBrushSize(val);
+          mobileBrushLabel.textContent = `${val}px`;
+          if (brushSizeFloat) brushSizeFloat.value = val;
+          if (brushSizeLabelFloat) brushSizeLabelFloat.textContent = `${val}px`;
+        });
+        const initialSize = editor.getState()?.brushSize || 30;
+        mobileBrushSize.value = initialSize;
+        mobileBrushLabel.textContent = `${initialSize}px`;
       }
 
-      function showToast(message) {
-        const toast = document.getElementById('toast');
-        if (toast) {
-          toast.textContent = message;
-          toast.classList.add('show');
-          setTimeout(() => toast.classList.remove('show'), 2500);
-        }
+      if (mobileToolAdd) {
+        mobileToolAdd.addEventListener('click', () => {
+          if (editor.getState().tool !== 'add') editor.toggleTool();
+        });
+      }
+      if (mobileToolErase) {
+        mobileToolErase.addEventListener('click', () => {
+          if (editor.getState().tool !== 'erase') editor.toggleTool();
+        });
       }
 
-      // ✅ Función centralizada de exportación (fuera de cualquier listener)
-      async function handleExport() {
-        const state = editor.getState();
-        if (!state.isProcessed) return;
-
-        updateStatusIcon('processing');  // ✅ Usar ícono, no texto
-
-        try {
-          const res = await fetch('/apply-mask', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              original: state.processedDataUrl,
-              mask: editor.getMaskDataUrl()
-            })
-          });
-          const data = await res.json();
-
-          if (data.success && data.image) {
-            const a = document.createElement('a');
-            a.href = data.image;
-            a.download = 'sin_fondo.png';
-            a.click();
-
-            showToast('✓ PNG descargado');
-            updateStatusIcon('saved');  // ✅ Ícono de check verde
-            
-            // Resetear modificaciones después de guardar exitosamente
-            hasModifications = false;
-            updateExportButtonState();
-          } else {
-            throw new Error(data.error || 'Error desconocido');
-          }
-        } catch (err) {
-          console.error('Error exportando:', err);
-          updateStatusIcon('error');  // ✅ Ícono de error
-          
-          // Fallback: descarga local desde canvas
-          const compositeUrl = editor.getCompositeDataUrl();
-          if (compositeUrl) {
-            const a = document.createElement('a');
-            a.href = compositeUrl;
-            a.download = 'sin_fondo_local.png';
-            a.click();
-            showToast('✓ Descarga local (fallback)');
-          }
-        }
+      if (toolAddFloat) {
+        toolAddFloat.addEventListener('click', () => {
+          if (editor.getState().tool !== 'add') editor.toggleTool();
+        });
+      }
+      if (toolEraseFloat) {
+        toolEraseFloat.addEventListener('click', () => {
+          if (editor.getState().tool !== 'erase') editor.toggleTool();
+        });
       }
 
-      // Exportar
+      btnUndo?.addEventListener('click', handleUndo);
+      btnRedo?.addEventListener('click', handleRedo);
+      mobileUndo?.addEventListener('click', handleUndo);
+      mobileRedo?.addEventListener('click', handleRedo);
+
       if (btnExport) {
         btnExport.addEventListener('click', async (e) => {
           e.preventDefault();
-          await handleExport();  
+          await handleExport();
         });
       }
-      document.getElementById('zoom-in')?.addEventListener('click', () => editor.zoomIn());
-      document.getElementById('zoom-out')?.addEventListener('click', () => editor.zoomOut());
-      document.getElementById('zoom-reset')?.addEventListener('click', () => editor.zoomReset());
-
-      // Keyboard shortcuts (solo desktop)
-      document.addEventListener('keydown', (e) => {
-        if (window.innerWidth > 768) {
-          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-          if (e.ctrlKey && e.key === 'z') {
-            e.preventDefault();
-            editor.undo?.();
-          } else if (e.ctrlKey && e.key === 'y') {
-            e.preventDefault();
-            editor.redo?.();
-          } else if (e.key.toLowerCase() === 'e') {
-            if (editor.getState().tool !== 'erase') editor.toggleTool();
-          } else if (e.key.toLowerCase() === 'a') {
-            if (editor.getState().tool !== 'add') editor.toggleTool();
-          } else if (e.key === '+' || e.key === '=') {
-            e.preventDefault();
-            editor.zoomIn();
-          } else if (e.key === '-') {
-            e.preventDefault();
-            editor.zoomOut();
-          } else if (e.key === '0') {
-            e.preventDefault();
-            editor.zoomReset();
-          }
-        }
-      });
-
       if (btnExportNav) {
         btnExportNav.addEventListener('click', async (e) => {
           e.preventDefault();
@@ -619,15 +521,31 @@
         });
       }
 
-      // Cleanup
-      window.addEventListener('beforeunload', () => editor.destroy());
-      window.addEventListener('resize', () => {
+      document.getElementById('zoom-in')?.addEventListener('click', () => editor.zoomIn());
+      document.getElementById('zoom-out')?.addEventListener('click', () => editor.zoomOut());
+      document.getElementById('zoom-reset')?.addEventListener('click', () => editor.zoomReset());
+
+      // Atajos de teclado (solo desktop)
+      document.addEventListener('keydown', (e) => {
         if (window.innerWidth > 768) {
-          sidebar.classList.remove('open');
-          overlay.classList.remove('active');
-          document.body.style.overflow = '';
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+          if (e.ctrlKey && e.key === 'z') { e.preventDefault(); editor.undo?.(); markAsModified(); }
+          else if (e.ctrlKey && e.key === 'y') { e.preventDefault(); editor.redo?.(); markAsModified(); }
+          else if (e.key.toLowerCase() === 'e') { if (editor.getState().tool !== 'erase') editor.toggleTool(); }
+          else if (e.key.toLowerCase() === 'a') { if (editor.getState().tool !== 'add') editor.toggleTool(); }
+          else if (e.key === '+' || e.key === '=') { e.preventDefault(); editor.zoomIn(); }
+          else if (e.key === '-') { e.preventDefault(); editor.zoomOut(); }
+          else if (e.key === '0') { e.preventDefault(); editor.zoomReset(); }
         }
       });
+
+      updateFloatingControls();
+      if (brushSizeFloat && brushSizeLabelFloat) {
+        brushSizeFloat.value = editor.getState()?.brushSize || 30;
+        brushSizeLabelFloat.textContent = `${brushSizeFloat.value}px`;
+      }
+
+      window.addEventListener('beforeunload', () => editor.destroy());
     });
   </script>
 </body>

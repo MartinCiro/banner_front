@@ -354,6 +354,45 @@ input[type=range]::-webkit-slider-thumb {
   border: 1px solid rgba(255,255,255,0.1);
 }
 
+#brush-controls-floating {
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+#brush-controls-floating.fade-in {
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+#brush-size-float {
+  -webkit-appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: #2a2a2a;
+  outline: none;
+  width: 100%;
+  display: block;
+  cursor: pointer;
+}
+
+#brush-size-float::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #00c896;
+  cursor: pointer;
+  border: 2px solid #0e0e0e;
+  transition: transform 0.1s;
+}
+
+#brush-size-float::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
 @media (max-width: 768px) {
   #brush-cursor {
     display: none !important;
@@ -406,7 +445,7 @@ input[type=range]::-webkit-slider-thumb {
   }
 
   .zoom-controls {
-    bottom: 80px;
+    bottom: 120px;
     right: 12px;
   }
   
@@ -426,6 +465,11 @@ input[type=range]::-webkit-slider-thumb {
   }
   #btn-export-nav:hover::after {
     display: none; /* Ocultar tooltip en móvil */
+  }
+
+  /* Ocultar controles flotantes de pincel en móvil */
+  #brush-controls-floating {
+    display: none !important;
   }
 }
 
