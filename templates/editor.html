@@ -29,13 +29,24 @@
   <!-- Header -->
   <header
     class="border-b border-white/5 px-4 py-3 flex items-center justify-between sticky top-0 bg-ink/95 backdrop-blur-sm z-20">
-    <div class="flex items-center gap-3">
+    <!-- Logo izquierdo - fixed width -->
+    <div class="flex items-center gap-3 w-32">
       <div class="w-2 h-2 rounded-full bg-accent"></div>
       <span class="text-sm font-semibold tracking-widest uppercase text-white/90">BG Remover</span>
       <span class="tag hidden sm:inline">FastAPI + rembg</span>
     </div>
 
-    <div class="flex items-center gap-3">
+    <!-- Input centrado - ocupa espacio flexible pero contenido centrado -->
+    <div class="flex-1 flex justify-center">
+      <div class="relative hidden" id="image-name-container">
+        <input type="text" id="image-name-input"
+          class="bg-dim/50 border border-white/20 rounded-lg px-3 py-1.5 text-sm font-mono text-white/80 focus:border-accent focus:outline-none transition-all w-48 text-center"
+          placeholder="nombre.png" />
+      </div>
+    </div>
+
+    <!-- Elementos derecha - fixed width -->
+    <div class="flex items-center gap-3 w-32 justify-end">
       <div id="status-bar" class="flex items-center gap-1 text-xs text-white/30">
         <svg id="status-icon" class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="8" stroke-width="2" />
@@ -79,6 +90,7 @@
         <span id="zoom-level" class="zoom-level">100%</span>
         <button id="zoom-in" class="zoom-btn" title="Zoom in (+)">+</button>
         <button id="zoom-reset" class="zoom-btn reset-zoom" title="Reset zoom">Reset</button>
+        <button id="rotate-btn" class="zoom-btn" title="Rotar 45°">↻</button>
       </div>
 
       <!-- Botón reemplazar imagen -->
@@ -143,7 +155,51 @@
       <div id="brush-cursor" class="pointer-events-none fixed z-50 hidden md:block"
         style="border: 2px solid #00c896; border-radius: 50%; transform: translate(-50%, -50%); mix-blend-mode: difference;">
       </div>
+      <div id="notes-overlay" class="fixed inset-0 bg-black/50 z-25 hidden transition-opacity" style="display: none;"></div>
     </main>
+
+    <!-- Panel de notas lateral -->
+    <div id="notes-panel" class="fixed z-30 transition-all duration-300">
+      <!-- Botón toggle para escritorio -->
+      <button id="notes-toggle-desktop"
+        class="desktop-only fixed z-40 bg-dim/90 backdrop-blur-sm border border-white/10 rounded-lg p-2 hover:border-accent/50 transition-all shadow-lg"
+        style="left: 16px; top: 80px;">
+        <span id="toggle-icon-desktop" class="text-white/80 text-sm font-mono">&lt;</span>
+      </button>
+
+      <!-- Contenido del panel -->
+      <div id="notes-content"
+        class="bg-dim/95 backdrop-blur-md border-r border-white/10 shadow-2xl transition-all duration-300 overflow-hidden"
+        style="width: 0px; height: 100%;">
+        <div class="p-4 h-full flex flex-col">
+          <div class="flex justify-between items-center mb-4 pb-2 border-b border-white/10">
+            <span class="text-xs font-mono text-accent uppercase tracking-wider">Notas</span>
+            <button id="notes-close-desktop" class="desktop-only text-white/40 hover:text-white transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <textarea id="notes-textarea"
+            class="flex-1 w-full bg-black/30 border border-white/10 rounded-lg p-3 text-white/80 font-mono text-sm resize focus:border-accent focus:outline-none transition-all"
+            placeholder="Escribe tus notas aquí..."></textarea>
+          <div class="mt-2 text-right">
+            <span class="text-xs text-white/30 font-mono" id="notes-char-count">0 caracteres</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botón toggle para móvil (debajo de zoom controls) -->
+    <button id="notes-toggle-mobile"
+      class="mobile-only fixed z-40 bg-dim/90 backdrop-blur-sm border border-white/10 rounded-lg w-10 h-10 p-0 flex items-center justify-center transition-all shadow-lg active:scale-95"
+      style="top: 72px; left: 12px;"
+      title="Notas">
+      <svg id="toggle-icon-mobile" class="w-5 h-5 text-white/80 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+
   </div>
 
   <!-- Elementos ocultos para carga de archivos (drag & drop programático) -->
@@ -161,6 +217,8 @@
       const canvasOriginal = document.getElementById('canvas-original');
       const canvasMask = document.getElementById('canvas-mask');
       const canvasMain = document.getElementById('canvas-main');
+      if (!canvasOriginal || !canvasMask || !canvasMain) return;
+
       const btnReplace = document.getElementById('btn-replace-image');
       const canvasWrap = document.getElementById('canvas-wrap');
       const brushControlsFloat = document.getElementById('brush-controls-floating');
@@ -178,7 +236,9 @@
       const dropZone = document.getElementById('drop-zone');
       const fileInput = document.getElementById('file-input');
 
-      if (!canvasOriginal || !canvasMask || !canvasMain) return;
+      const imageNameContainer = document.getElementById('image-name-container');
+      const imageNameInput = document.getElementById('image-name-input');
+
 
       const zoomControls = document.getElementById('zoom-controls');
       const btnExportNav = document.getElementById('btn-export-nav');
@@ -191,6 +251,23 @@
       const mobileUndo = document.getElementById('mobile-undo');
       const mobileRedo = document.getElementById('mobile-redo');
 
+      const rotateBtn = document.getElementById('rotate-btn');
+
+      const notesPanel = document.getElementById('notes-panel');
+      const notesContent = document.getElementById('notes-content');
+      const notesTextarea = document.getElementById('notes-textarea');
+      const notesCharCount = document.getElementById('notes-char-count');
+      const notesToggleDesktop = document.getElementById('notes-toggle-desktop');
+      const notesCloseDesktop = document.getElementById('notes-close-desktop');
+      const notesToggleMobile = document.getElementById('notes-toggle-mobile');
+
+      let notesOverlay = document.getElementById('notes-overlay');
+      let currentFileName = '';
+      let isNotesOpen = false;
+      let isMobile = window.innerWidth <= 768;
+      const savedNotes = localStorage.getItem('notesContent');
+      const savedOpenState = localStorage.getItem('notesOpen') === 'true';
+
       const handleUndo = () => { editor.undo?.(); markAsModified(); };
       const handleRedo = () => { editor.redo?.(); markAsModified(); };
 
@@ -198,14 +275,17 @@
 
       async function handleFile(file, isReplace = false) {
         if (!file) return;
-        
+
+        // Actualizar el input con el nombre del archivo
+        updateImageNameInput(file);
+
         // Cargar la imagen como NO procesada
         await editor.loadImage(file, false);
         if (editor.getState().isProcessed === true) {
           editor.setProcessed(false);
           if (editor._state) editor._state.isProcessed = false;
         }
-        
+
         fileInput.value = '';
       }
 
@@ -262,7 +342,7 @@
         updateExportButtonState();
       }
 
-            function showToast(message) {
+      function showToast(message) {
         const toast = document.getElementById('toast');
         if (toast) {
           toast.textContent = message;
@@ -273,7 +353,7 @@
 
       function setInitialToolButtonStyles() {
         const tool = editor.getState().tool; // Debería ser 'erase'
-        
+
         // Botones flotantes desktop
         const toolAddFloat = document.getElementById('tool-add-float');
         const toolEraseFloat = document.getElementById('tool-erase-float');
@@ -281,7 +361,7 @@
           toolAddFloat.classList.toggle('btn-active', tool === 'add');
           toolEraseFloat.classList.toggle('btn-active', tool === 'erase');
         }
-        
+
         // Botones móviles
         const mobileToolAdd = document.getElementById('mobile-tool-add');
         const mobileToolErase = document.getElementById('mobile-tool-erase');
@@ -291,30 +371,112 @@
         }
       }
 
+      function getFileNameWithoutExtension(file) {
+        if (!file) return 'sin_fondo';
+        const name = file.name;
+        const lastDot = name.lastIndexOf('.');
+        return lastDot > 0 ? name.substring(0, lastDot) : name;
+      }
+
+      function getFileExtension(file) {
+        if (!file) return 'png';
+        const lastDot = file.name.lastIndexOf('.');
+        return lastDot > 0 ? file.name.substring(lastDot + 1) : 'png';
+      }
+
+      // Función para actualizar el input con el nombre del archivo cargado
+      function updateImageNameInput(file) {
+        if (file && imageNameContainer && imageNameInput) {
+          const nameWithoutExt = getFileNameWithoutExtension(file);
+          const extension = getFileExtension(file);
+          currentFileName = nameWithoutExt;
+          imageNameInput.value = nameWithoutExt;
+          imageNameInput.placeholder = `${nameWithoutExt}.${extension}`;
+          imageNameContainer.classList.remove('hidden');
+        } else if (!file && imageNameContainer) {
+          imageNameContainer.classList.add('hidden');
+        }
+      }
+
+      function getFullImageName() {
+        const state = editor.getState();
+        const originalFile = state.file;
+        const extension = originalFile ? getFileExtension(originalFile) : 'png';
+        const customName = imageNameInput ? imageNameInput.value.trim() : '';
+        const finalName = customName || (originalFile ? getFileNameWithoutExtension(originalFile) : 'sin_fondo');
+        return `${finalName}.${extension}`;
+      }
+
+      function resetImageNameInput() {
+        if (imageNameContainer) imageNameContainer.classList.add('hidden');
+        if (imageNameInput) imageNameInput.value = '';
+        currentFileName = '';
+      }
+
+      function toggleNotes(open) {
+        isNotesOpen = open;
+        
+        if (isMobile) {
+          // Modo móvil
+          if (open) {
+            notesContent.classList.add('open');
+            notesOverlay.classList.remove('hidden');
+            notesOverlay.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            const mobileIcon = document.getElementById('toggle-icon-mobile');
+            if (mobileIcon) mobileIcon.style.transform = 'rotate(180deg)';
+          } else {
+            notesContent.classList.remove('open');
+            notesOverlay.classList.add('hidden');
+            notesOverlay.style.display = 'none';
+            document.body.style.overflow = '';
+            const mobileIcon = document.getElementById('toggle-icon-mobile');
+            if (mobileIcon) mobileIcon.style.transform = 'rotate(0deg)';
+          }
+        } else {
+          // Modo escritorio
+          if (open) {
+            notesContent.style.width = '380px';
+            document.getElementById('toggle-icon-desktop').textContent = '>';
+            // En escritorio también mostramos overlay semi-transparente
+            notesOverlay.classList.remove('hidden');
+            notesOverlay.style.display = 'block';
+            notesOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+          } else {
+            notesContent.style.width = '0px';
+            document.getElementById('toggle-icon-desktop').textContent = '<';
+            notesOverlay.classList.add('hidden');
+            notesOverlay.style.display = 'none';
+          }
+        }
+        
+        localStorage.setItem('notesOpen', open);
+      }
+
       // Procesamiento automático de fondo
       async function processImageAutomatically() {
         const state = editor.getState();
         if (!state.file) return;
-        
+
         updateStatusIcon('processing');
-        
+
         try {
           const fd = new FormData();
           fd.append('file', state.file);
-          
+
           const res = await fetch('/remove-bg', { method: 'POST', body: fd });
           const data = await res.json();
-          
+
           if (!data.success) throw new Error(data.error);
-          
+
           editor.setProcessedDataUrl(data.image);
-          
+
           await editor.loadImage(data.image, true);
-          
+
           updateStatusIcon('ready');
           updateExportButtonState();
           showToast('✓ Fondo eliminado');
-          
+
         } catch (err) {
           console.error('Error:', err);
           showToast('✗ ' + err.message);
@@ -339,7 +501,7 @@
           if (data.success && data.image) {
             const a = document.createElement('a');
             a.href = data.image;
-            a.download = 'sin_fondo.png';
+            a.download = getFullImageName(); // Usar el nombre personalizado
             a.click();
             showToast('✓ PNG descargado');
             updateStatusIcon('saved');
@@ -355,10 +517,23 @@
           if (compositeUrl) {
             const a = document.createElement('a');
             a.href = compositeUrl;
-            a.download = 'sin_fondo_local.png';
+            a.download = getFullImageName(); // Usar el nombre personalizado
             a.click();
             showToast('✓ Descarga local (fallback)');
           }
+        }
+      }
+
+      function handleClickOutside(event) {
+        if (!isNotesOpen) return;
+        
+        // Verificar si el clic fue fuera del panel de notas y no en el botón toggle
+        const isClickInsideNotes = notesContent.contains(event.target);
+        const isClickOnToggleDesktop = notesToggleDesktop && notesToggleDesktop.contains(event.target);
+        const isClickOnToggleMobile = notesToggleMobile && notesToggleMobile.contains(event.target);
+        
+        if (!isClickInsideNotes && !isClickOnToggleDesktop && !isClickOnToggleMobile) {
+          toggleNotes(false);
         }
       }
 
@@ -391,7 +566,8 @@
               setTimeout(() => btnReplace.classList.remove('fade-in'), 200);
             }
             updateFloatingControls();
-            if (!editor.getState().isProcessed && editor.getState().file) await processImageAutomatically(); 
+            if (!editor.getState().file && imageNameContainer) imageNameContainer.classList.add('hidden');
+            if (!editor.getState().isProcessed && editor.getState().file) await processImageAutomatically();
           },
           onBrushChange: (size) => {
             // Sincronizar etiquetas si existen
@@ -403,9 +579,9 @@
         }
       });
 
-      if (editor.getState().tool !== 'erase') editor.toggleTool(); 
+      if (editor.getState().tool !== 'erase') editor.toggleTool();
 
-      
+
 
       if (canvasMain) {
         let isDrawing = false;
@@ -556,6 +732,7 @@
 
       // Atajos de teclado (solo desktop)
       document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && isNotesOpen) toggleNotes(false);
         if (window.innerWidth > 768) {
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           if (e.ctrlKey && e.key === 'z') { e.preventDefault(); editor.undo?.(); markAsModified(); }
@@ -567,7 +744,7 @@
           else if (e.key === '0') { e.preventDefault(); editor.zoomReset(); }
         }
       });
-      
+
       setInitialToolButtonStyles();
       updateFloatingControls();
       if (brushSizeFloat && brushSizeLabelFloat) {
@@ -575,7 +752,73 @@
         brushSizeLabelFloat.textContent = `${brushSizeFloat.value}px`;
       }
 
+      if (rotateBtn) {
+        rotateBtn.addEventListener('click', async () => {
+          rotateBtn.classList.add('rotating');
+          await editor.rotateImage(90);
+          setTimeout(() => rotateBtn.classList.remove('rotating'), 500);
+          markAsModified();
+        });
+      }
+
+      if (imageNameInput) {
+        imageNameInput.addEventListener('keydown', (e) => {
+          e.stopPropagation(); // Evitar que los atajos de teclado interfieran
+        });
+
+        imageNameInput.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
+      }
+
+      if (savedNotes) {
+        notesTextarea.value = savedNotes;
+        notesCharCount.textContent = `${savedNotes.length} caracteres`;
+      }
+
+      if (savedOpenState) setTimeout(() => toggleNotes(true), 100);
+      notesTextarea.addEventListener('input', () => {
+        const count = notesTextarea.value.length;
+        notesCharCount.textContent = `${count} caracteres`;
+        localStorage.setItem('notesContent', notesTextarea.value);
+      });
+
+      if (notesToggleDesktop) {
+        notesToggleDesktop.addEventListener('click', () => {
+          toggleNotes(!isNotesOpen);
+        });
+      }
+
+      if (notesCloseDesktop) {
+        notesCloseDesktop.addEventListener('click', () => {
+          toggleNotes(false);
+        });
+      }
+
+      // Eventos móvil
+      if (notesToggleMobile) {
+        notesToggleMobile.addEventListener('click', () => {
+          toggleNotes(!isNotesOpen);
+        });
+      }
+
+      if (!notesOverlay) {
+        notesOverlay = document.createElement('div');
+        notesOverlay.id = 'notes-overlay';
+        notesOverlay.className = 'fixed inset-0 bg-black/50 z-25 hidden transition-opacity';
+        notesOverlay.style.display = 'none';
+        document.body.appendChild(notesOverlay);
+      }
+
+      document.addEventListener('click', handleClickOutside);
+
       window.addEventListener('beforeunload', () => editor.destroy());
+      window.addEventListener('resize', () => {
+        const wasMobile = isMobile;
+        isMobile = window.innerWidth <= 768;
+
+        if (wasMobile !== isMobile && isNotesOpen) toggleNotes(false);
+      });
     });
   </script>
 </body>

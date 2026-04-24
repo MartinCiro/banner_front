@@ -17,7 +17,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 session = new_session("u2net")
 
 
-@app.get("/")
+@app.get("/editor")
 async def editor(request: Request):
     return templates.TemplateResponse("editor.html", {"request": request})
 

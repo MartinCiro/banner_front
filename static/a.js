@@ -32,6 +32,8 @@ const MaskEditor = (function () {
     #lastPanX = 0;
     #lastPanY = 0;
     #spacePressed = false;
+    #isRotating = false;
+    #cssRotation = 0;
 
     constructor(config) {
       if (!config?.originalCanvas || !config?.maskCanvas || !config?.mainCanvas) {
@@ -180,24 +182,51 @@ const MaskEditor = (function () {
     /** Conversión de coordenadas pantalla → canvas */
     #screenToCanvas(clientX, clientY) {
       const rect = this.#canvas.main.getBoundingClientRect();
-      
-      // Coordenadas relativas al canvas visual
-      const relX = clientX - rect.left;
-      const relY = clientY - rect.top;
-      
-      // Validar bounds
-      if (relX < 0 || relX > rect.width || relY < 0 || relY > rect.height) {
+
+      // Obtener el punto en el espacio visual
+      const visualX = clientX - rect.left;
+      const visualY = clientY - rect.top;
+
+      // Normalizar a 0-1
+      let normX = visualX / rect.width;
+      let normY = visualY / rect.height;
+
+      // Aplicar rotación inversa (si hay rotación CSS)
+      if (this.#cssRotation !== 0) {
+        // Convertir a coordenadas centradas
+        const centerX = normX - 0.5;
+        const centerY = normY - 0.5;
+
+        // Rotar inversamente
+        const angleRad = (this.#cssRotation * Math.PI) / 180;
+        const cos = Math.cos(angleRad);
+        const sin = Math.sin(angleRad);
+
+        // IMPORTANTE: Rotar en dirección opuesta
+        const rotatedX = centerX * cos + centerY * sin;
+        const rotatedY = -centerX * sin + centerY * cos;
+
+        // Volver a normalizar
+        normX = rotatedX + 0.5;
+        normY = rotatedY + 0.5;
+      }
+
+      // Aplicar zoom y pan
+      const canvasX = (normX - this.#panX / rect.width) / this.#zoom;
+      const canvasY = (normY - this.#panY / rect.height) / this.#zoom;
+
+      // Convertir a coordenadas de píxel
+      let x = canvasX * this.#state.W;
+      let y = canvasY * this.#state.H;
+
+      // Validar límites
+      if (x < 0 || x >= this.#state.W || y < 0 || y >= this.#state.H) {
         return { x: -1, y: -1 };
       }
-      
-      // Normalizar 0-1 → coordenadas intrínsecas
-      // (funciona igual con cualquier transform-origin porque getBoundingClientRect ya incluye todo)
-      const x = (relX / rect.width) * this.#state.W;
-      const y = (relY / rect.height) * this.#state.H;
-      
-      return { 
-        x: Math.max(0, Math.min(this.#state.W - 1, Math.round(x))), 
-        y: Math.max(0, Math.min(this.#state.H - 1, Math.round(y))) 
+
+      return {
+        x: Math.max(0, Math.min(this.#state.W - 1, Math.round(x))),
+        y: Math.max(0, Math.min(this.#state.H - 1, Math.round(y)))
       };
     }
 
@@ -245,10 +274,10 @@ const MaskEditor = (function () {
       handlers.mouseDown = (e) => {
         // No iniciar pintura si es botón central o espacio presionado (modo pan)
         if (e.button === 1 || e.button === 2) return;
-        
+
         // Verificar si espacio está presionado (lo trackeamos con una propiedad)
         if (this.#isPanning) return;
-        
+
         e.preventDefault();
         this.#state.painting = true;
         const pos = this.#screenToCanvas(e.clientX, e.clientY);
@@ -306,15 +335,15 @@ const MaskEditor = (function () {
 
       const rect = this.#canvas.main.getBoundingClientRect();
       const isOverCanvas = clientX >= rect.left && clientX <= rect.right &&
-                          clientY >= rect.top && clientY <= rect.top + rect.height;
-      
+        clientY >= rect.top && clientY <= rect.top + rect.height;
+
       if (!isOverCanvas) {
         c.style.display = 'none';
         return;
       }
-      
+
       c.style.display = 'block';
-      
+
       // Tamaño del cursor escalado por zoom
       const scaledSize = brushSize * this.#zoom;
 
@@ -407,7 +436,7 @@ const MaskEditor = (function () {
       this.#panY = 0;
       this.#applyTransform();
       this.#updateZoomUI();
-      
+
       // Mostrar controles de zoom
       const zoomControls = document.getElementById('zoom-controls');
       if (zoomControls) zoomControls.classList.remove('hidden');
@@ -538,9 +567,7 @@ const MaskEditor = (function () {
       });
 
       // Guardar archivo si es File
-      if (source instanceof File) {
-        this.#state.file = source;
-      }
+      if (source instanceof File) this.#state.file = source;
 
       this.#state.isProcessed = isProcessed;
       this.#buildCanvases(img, isProcessed);
@@ -568,32 +595,32 @@ const MaskEditor = (function () {
       const wheelHandler = (e) => {
         e.preventDefault();
         const rect = this.#canvas.main.getBoundingClientRect();
-        
+
         // Coordenadas del mouse RELATIVAS al centro del canvas visual
         const centerX = rect.width / 2;
         const centerY = rect.height / 2;
         const mouseX = e.clientX - rect.left - centerX;  // ← Relativo al centro
         const mouseY = e.clientY - rect.top - centerY;
-        
+
         // Mapear a coordenadas intrínsecas
-        const normX = (mouseX / rect.width) + 0.5; 
+        const normX = (mouseX / rect.width) + 0.5;
         const normY = (mouseY / rect.height) + 0.5;
         const canvasX = normX * this.#state.W;
         const canvasY = normY * this.#state.H;
-        
+
         // Calcular nuevo zoom
         const delta = e.deltaY > 0 ? -this.#zoomStep : this.#zoomStep;
         const newZoom = Math.max(this.#minZoom, Math.min(this.#maxZoom, this.#zoom + delta));
-        
+
         if (Math.abs(newZoom - this.#zoom) < 0.001) return;
-        
+
         // El pan ajusta la posición del CENTRO del canvas
-        const currentScreenX = this.#panX + centerX + (canvasX - this.#state.W/2) * this.#zoom;
-        const currentScreenY = this.#panY + centerY + (canvasY - this.#state.H/2) * this.#zoom;
-        
-        this.#panX = currentScreenX - centerX - (canvasX - this.#state.W/2) * newZoom;
-        this.#panY = currentScreenY - centerY - (canvasY - this.#state.H/2) * newZoom;
-        
+        const currentScreenX = this.#panX + centerX + (canvasX - this.#state.W / 2) * this.#zoom;
+        const currentScreenY = this.#panY + centerY + (canvasY - this.#state.H / 2) * this.#zoom;
+
+        this.#panX = currentScreenX - centerX - (canvasX - this.#state.W / 2) * newZoom;
+        this.#panY = currentScreenY - centerY - (canvasY - this.#state.H / 2) * newZoom;
+
         this.#zoom = newZoom;
         this.#applyTransform();
         this.#updateZoomUI();
@@ -615,13 +642,13 @@ const MaskEditor = (function () {
         if (this.#isPanning) {
           const dx = e.clientX - this.#lastPanX;
           const dy = e.clientY - this.#lastPanY;
-          
+
           this.#panX += dx;
           this.#panY += dy;
-          
+
           this.#lastPanX = e.clientX;
           this.#lastPanY = e.clientY;
-          
+
           this.#applyTransform();
         }
       };
@@ -675,8 +702,9 @@ const MaskEditor = (function () {
     }
 
     #applyTransform() {
-      this.#canvas.main.style.transform = `translate(${this.#panX}px, ${this.#panY}px) scale(${this.#zoom})`;
-      this.#canvas.main.style.transformOrigin = '50% 50%';  // ← Coincidir con CSS
+      // Aplicar transformación incluyendo la rotación actual
+      this.#canvas.main.style.transform = `translate(${this.#panX}px, ${this.#panY}px) scale(${this.#zoom}) rotate(${this.#cssRotation}deg)`;
+      this.#canvas.main.style.transformOrigin = '50% 50%';
     }
 
     #updateZoomUI() {
@@ -697,10 +725,10 @@ const MaskEditor = (function () {
       const rect = this.#canvas.main.getBoundingClientRect();
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
-      
+
       const focalX = (centerX - this.#panX) / this.#zoom;
       const focalY = (centerY - this.#panY) / this.#zoom;
-      
+
       const newZoom = Math.min(this.#maxZoom, this.#zoom + this.#zoomStep);
       if (newZoom !== this.#zoom) {
         this.#zoom = newZoom;
@@ -716,10 +744,10 @@ const MaskEditor = (function () {
       const rect = this.#canvas.main.getBoundingClientRect();
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
-      
+
       const focalX = (centerX - this.#panX) / this.#zoom;
       const focalY = (centerY - this.#panY) / this.#zoom;
-      
+
       const newZoom = Math.max(this.#minZoom, this.#zoom - this.#zoomStep);
       if (newZoom !== this.#zoom) {
         this.#zoom = newZoom;
@@ -742,6 +770,49 @@ const MaskEditor = (function () {
 
     getZoom() {
       return this.#zoom;
+    }
+
+    /** Rotar la imagen 45 grados */
+    rotateImage(degrees = 45) {
+      // Evitar rotaciones múltiples simultáneas
+      if (this.#isRotating) return false;
+
+      this.#isRotating = true;
+
+      try {
+        // Acumular rotación
+        this.#cssRotation = (this.#cssRotation + degrees) % 360;
+
+        // Aplicar rotación CSS al canvas principal (manteniendo zoom y pan)
+        this.#canvas.main.style.transform = `translate(${this.#panX}px, ${this.#panY}px) scale(${this.#zoom}) rotate(${this.#cssRotation}deg)`;
+        this.#canvas.main.style.transformOrigin = '50% 50%';
+
+        // Actualizar cursor del pincel (opcional)
+        if (this.#canvas.cursor) this.#canvas.cursor.style.transform = `rotate(${this.#cssRotation}deg)`;
+
+        return true;
+      } catch (error) {
+        console.error('Error al rotar:', error);
+        return false;
+      } finally {
+        setTimeout(() => {
+          this.#isRotating = false;
+        }, 100);
+      }
+    }
+
+    /** Resetear rotación */
+    resetRotation() {
+      this.#cssRotation = 0;
+      this.#applyTransform(); // Reaplicar solo zoom y pan
+      if (this.#canvas.cursor) {
+        this.#canvas.cursor.style.transform = '';
+      }
+    }
+
+    /** Obtener ángulo de rotación actual */
+    getRotation() {
+      return this.#cssRotation;
     }
   }
 

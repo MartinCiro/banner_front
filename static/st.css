@@ -32,6 +32,7 @@ body {
   will-change: transform;
   transform-origin: 50% 50% !important; 
   image-rendering: pixelated;
+  transition: none !important; 
 }
 
 #canvas-wrap:hover #brush-cursor,
@@ -438,6 +439,98 @@ input[type=range]::-webkit-slider-thumb {
   border: 2px solid #0e0e0e;
 }
 
+/* Efecto hover para el botón de rotación */
+#rotate-btn:hover {
+  transform: rotate(15deg);
+  transition: transform 0.3s ease;
+}
+
+/* Animación de rotación mientras se aplica */
+#rotate-btn.rotating {
+  animation: spin 0.5s ease;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+#notes-panel {
+  top: 0;
+  left: 0;
+  height: 100vh;
+  pointer-events: none;
+}
+
+#notes-content {
+  pointer-events: auto;
+  height: 100vh;
+  background: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(12px);
+}
+
+#notes-textarea {
+  resize: both;
+  min-height: 200px;
+}
+
+#notes-textarea::-webkit-resizer {
+  border-width: 8px;
+  border-style: solid;
+  border-color: transparent #00c896 #00c896 transparent;
+  border-radius: 2px;
+}
+
+/* Animaciones para móvil */
+#notes-content-mobile {
+  transition: transform 0.3s ease-in-out;
+  transform: translateY(100%);
+}
+
+#notes-content-mobile.open {
+  transform: translateY(0);
+}
+
+/* Botón toggle escritorio */
+#notes-toggle-desktop {
+  position: fixed;
+  left: 16px;
+  top: 80px;
+  z-index: 40;
+  background: rgba(14, 14, 14, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+#notes-toggle-desktop:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+#notes-toggle-desktop:active {
+  background: rgba(0, 200, 150, 0.1);
+  border-color: #00c896;
+}
+
+.mobile-only {
+  display: none;
+}
+
+.desktop-only {
+  display: block;
+}
+
 @media (max-width: 768px) {
   #brush-cursor {
     display: none !important;
@@ -445,6 +538,8 @@ input[type=range]::-webkit-slider-thumb {
 
   #canvas-main {
     cursor: default !important;
+    transform-origin: 50% 50% !important;
+    transition: none !important; 
   }
 
   .mobile-only {
@@ -490,13 +585,16 @@ input[type=range]::-webkit-slider-thumb {
   }
 
   .zoom-controls {
-    bottom: 120px;
-    right: 12px;
+    top: 12px;  
+    left: 12px;
+    right: auto;
+    bottom: auto;
   }
   
   .zoom-btn {
     width: 44px;
     height: 44px;
+    font-size: 20px;
   }
   
   #btn-replace-image {
@@ -516,6 +614,94 @@ input[type=range]::-webkit-slider-thumb {
   #brush-controls-floating {
     display: none !important;
   }
+
+  #rotate-btn {
+    font-size: 22px;
+  }
+
+  #notes-panel {
+    pointer-events: none;
+  }
+  
+  #notes-content {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100% !important;
+    height: auto !important;
+    max-height: 70vh;
+    background: rgba(20, 20, 20, 0.98);
+    backdrop-filter: blur(12px);
+    border-radius: 16px 16px 0 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    transform: translateY(100%);
+    transition: transform 0.3s ease-in-out;
+    z-index: 50;
+  }
+  
+  #notes-content.open {
+    transform: translateY(0);
+  }
+
+  
+  #notes-textarea {
+    font-size: 16px; 
+    min-height: 200px;
+    max-height: 50vh;
+  }
+  
+  #notes-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 40;
+    transition: opacity 0.3s ease;
+  }
+
+  #notes-toggle-mobile {
+    position: fixed !important;
+    top: 140px !important;
+    right: 16px !important;  
+    left: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    background: rgba(42, 42, 42, 0.9);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    width: 44px;
+    height: 44px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    gap: 6px;
+
+  }
+
+  #notes-overlay.hidden {
+    display: none;
+  }
+
+  #notes-toggle-mobile:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+  }
+
+  
+  #notes-toggle-mobile:active {
+    transform: scale(0.95);
+    background: rgba(0, 200, 150, 0.1);
+    border-color: #00c896;
+  }
+  
+  #notes-toggle-mobile svg {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 @media (min-width: 769px) {
@@ -534,12 +720,38 @@ input[type=range]::-webkit-slider-thumb {
   #sidebar-overlay {
     display: none !important;
   }
+
   #brush-cursor {
     display: block !important;
     min-width: 10px !important;
     min-height: 10px !important;
     /* Eliminar mix-blend-mode si causa problemas */
     mix-blend-mode: normal !important;
+  }
+
+  .zoom-controls {
+    bottom: 16px;
+    right: 16px;
+    top: auto;
+    left: auto;
+  }
+  
+  .zoom-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  #notes-content {
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  #notes-textarea {
+    min-width: 300px;
+  }
+
+  #notes-toggle-desktop {
+    pointer-events: auto !important;
+    z-index: 9999 !important;
   }
 }
 
