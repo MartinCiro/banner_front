@@ -385,6 +385,11 @@
         return lastDot > 0 ? file.name.substring(lastDot + 1) : 'png';
       }
 
+      function containsJabon(productName) {
+        if (!productName) return false;
+        return /jab[oó]n/i.test(productName);
+      }
+
       // Función para actualizar el input con el nombre del archivo cargado
       function updateImageNameInput(file) {
         if (file && imageNameContainer && imageNameInput) {
@@ -394,6 +399,10 @@
           imageNameInput.value = nameWithoutExt;
           imageNameInput.placeholder = `${nameWithoutExt}.${extension}`;
           imageNameContainer.classList.remove('hidden');
+
+          // Disparar la búsqueda de descripción basada en el nombre del archivo
+          if (containsJabon(nameWithoutExt)) updateNotesFromProductName(nameWithoutExt);
+
         } else if (!file && imageNameContainer) {
           imageNameContainer.classList.add('hidden');
         }
@@ -423,6 +432,7 @@
             notesContent.classList.add('open');
             notesOverlay.classList.remove('hidden');
             notesOverlay.style.display = 'block';
+            notesOverlay.style.pointerEvents = 'auto'; // Activar solo cuando está abierto
             document.body.style.overflow = 'hidden';
             const mobileIcon = document.getElementById('toggle-icon-mobile');
             if (mobileIcon) mobileIcon.style.transform = 'rotate(180deg)';
@@ -430,6 +440,7 @@
             notesContent.classList.remove('open');
             notesOverlay.classList.add('hidden');
             notesOverlay.style.display = 'none';
+            notesOverlay.style.pointerEvents = 'none'; // Desactivar cuando está cerrado
             document.body.style.overflow = '';
             const mobileIcon = document.getElementById('toggle-icon-mobile');
             if (mobileIcon) mobileIcon.style.transform = 'rotate(0deg)';
@@ -439,7 +450,6 @@
           if (open) {
             notesContent.style.width = '380px';
             document.getElementById('toggle-icon-desktop').textContent = '>';
-            // En escritorio también mostramos overlay semi-transparente
             notesOverlay.classList.remove('hidden');
             notesOverlay.style.display = 'block';
             notesOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
@@ -451,7 +461,32 @@
           }
         }
 
+        if (open) {
+          const currentProductName = imageNameInput ? imageNameInput.value.trim() : '';
+          if (containsJabon(currentProductName)) {
+            fetchDescriptionFromName(currentProductName).then(description => {
+              if (description && notesTextarea.value !== description) {
+                notesTextarea.value = description;
+                notesCharCount.textContent = `${description.length} caracteres`;
+                localStorage.setItem('notesContent', description);
+              }
+            });
+          }
+        }
+
         localStorage.setItem('notesOpen', open);
+      }
+
+      function handleClickOutside(event) {
+        if (!isNotesOpen) return;
+
+        const isClickInsideNotes = notesContent.contains(event.target);
+        const isClickOnToggleDesktop = notesToggleDesktop && notesToggleDesktop.contains(event.target);
+        const isClickOnToggleMobile = notesToggleMobile && notesToggleMobile.contains(event.target);
+
+        const isClickOnOverlay = notesOverlay && notesOverlay.contains(event.target) && !isClickInsideNotes;
+
+        if ((isClickOnOverlay || (!isClickInsideNotes && !isClickOnToggleDesktop && !isClickOnToggleMobile))) toggleNotes(false)
       }
 
       // Procesamiento automático de fondo
@@ -525,18 +560,53 @@
         }
       }
 
-      function handleClickOutside(event) {
-        if (!isNotesOpen) return;
+      // Función para enviar el nombre al endpoint /description
+      async function fetchDescriptionFromName(productName) {
+        if (!productName || productName.trim() === '') return '';
 
-        // Verificar si el clic fue fuera del panel de notas y no en el botón toggle
-        const isClickInsideNotes = notesContent.contains(event.target);
-        const isClickOnToggleDesktop = notesToggleDesktop && notesToggleDesktop.contains(event.target);
-        const isClickOnToggleMobile = notesToggleMobile && notesToggleMobile.contains(event.target);
+        if (!containsJabon(productName)) return '';
 
-        if (!isClickInsideNotes && !isClickOnToggleDesktop && !isClickOnToggleMobile) {
-          toggleNotes(false);
+        try {
+          const response = await fetch('/description', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name: productName.trim() })
+          });
+
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+          const data = await response.json();
+
+          const description = data.description || data.text || data.message || '';
+
+          return description;
+        } catch (error) {
+          console.error('Error fetching description:', error);
+          return '';
         }
       }
+
+      // Función para actualizar las notas basado en el nombre del producto
+      async function updateNotesFromProductName(productName) {
+        const description = await fetchDescriptionFromName(productName);
+
+        if (description && description.trim() !== '') {
+          // Si hay descripción, actualizar el textarea y guardar en localStorage
+          notesTextarea.value = description;
+          notesCharCount.textContent = `${description.length} caracteres`;
+          localStorage.setItem('notesContent', description);
+
+          showToast('📝 Descripción cargada automáticamente');
+        } else if (containsJabon(productName)) {
+          notesTextarea.value = '';
+          notesCharCount.textContent = `0 caracteres`;
+          localStorage.setItem('notesContent', '');
+          showToast('⚠️ No se encontró descripción para este producto');
+        }
+      }
+
 
       // Crear instancia del editor
       const editor = MaskEditor.create({
@@ -633,9 +703,7 @@
 
       if (emptyState && fileInput) {
         emptyState.style.cursor = 'pointer';
-        emptyState.addEventListener('click', () => {
-          fileInput.click();
-        });
+        emptyState.addEventListener('click', () => fileInput.click());
       }
 
       if (canvasWrap) {
@@ -662,11 +730,7 @@
         });
       }
 
-      if (btnReplace) {
-        btnReplace.addEventListener('click', () => {
-          fileInput.click();
-        });
-      }
+      if (btnReplace) btnReplace.addEventListener('click', () => fileInput.click());
 
       // Controles de pincel flotantes
       if (brushSizeFloat) {
@@ -693,27 +757,13 @@
         mobileBrushLabel.textContent = `${initialSize}px`;
       }
 
-      if (mobileToolAdd) {
-        mobileToolAdd.addEventListener('click', () => {
-          if (editor.getState().tool !== 'add') editor.toggleTool();
-        });
-      }
-      if (mobileToolErase) {
-        mobileToolErase.addEventListener('click', () => {
-          if (editor.getState().tool !== 'erase') editor.toggleTool();
-        });
-      }
+      if (mobileToolAdd) mobileToolAdd.addEventListener('click', () => { if (editor.getState().tool !== 'add') editor.toggleTool(); });
 
-      if (toolAddFloat) {
-        toolAddFloat.addEventListener('click', () => {
-          if (editor.getState().tool !== 'add') editor.toggleTool();
-        });
-      }
-      if (toolEraseFloat) {
-        toolEraseFloat.addEventListener('click', () => {
-          if (editor.getState().tool !== 'erase') editor.toggleTool();
-        });
-      }
+      if (mobileToolErase) mobileToolErase.addEventListener('click', () => { if (editor.getState().tool !== 'erase') editor.toggleTool(); });
+
+      if (toolAddFloat) toolAddFloat.addEventListener('click', () => { if (editor.getState().tool !== 'add') editor.toggleTool(); });
+      
+      if (toolEraseFloat) toolEraseFloat.addEventListener('click', () => { if (editor.getState().tool !== 'erase') editor.toggleTool(); });
 
       btnUndo?.addEventListener('click', handleUndo);
       btnRedo?.addEventListener('click', handleRedo);
@@ -763,12 +813,18 @@
       }
 
       if (imageNameInput) {
-        imageNameInput.addEventListener('keydown', (e) => {
-          e.stopPropagation(); // Evitar que los atajos de teclado interfieran
-        });
+        imageNameInput.addEventListener('keydown', (e) =>  e.stopPropagation());
 
-        imageNameInput.addEventListener('click', (e) => {
-          e.stopPropagation();
+        imageNameInput.addEventListener('click', (e) =>  e.stopPropagation());
+
+        // Detectar cambios en el input para actualizar notas
+        let debounceTimer;
+        imageNameInput.addEventListener('input', (e) => {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            const newName = e.target.value.trim();
+            if (containsJabon(newName)) updateNotesFromProductName(newName);
+          }, 500);
         });
       }
 
@@ -784,25 +840,13 @@
         localStorage.setItem('notesContent', notesTextarea.value);
       });
 
-      if (notesToggleDesktop) {
-        notesToggleDesktop.addEventListener('click', () => {
-          toggleNotes(!isNotesOpen);
-        });
-      }
+      if (notesToggleDesktop) notesToggleDesktop.addEventListener('click', () => { toggleNotes(!isNotesOpen); });
 
-      if (notesCloseDesktop) {
-        notesCloseDesktop.addEventListener('click', () => {
-          toggleNotes(false);
-        });
-      }
-
+      if (notesCloseDesktop) notesCloseDesktop.addEventListener('click', () => { toggleNotes(false); });
+      
       // Eventos móvil
-      if (notesToggleMobile) {
-        notesToggleMobile.addEventListener('click', () => {
-          toggleNotes(!isNotesOpen);
-        });
-      }
-
+      if (notesToggleMobile) notesToggleMobile.addEventListener('click', () => { toggleNotes(!isNotesOpen); });
+      
       if (!notesOverlay) {
         notesOverlay = document.createElement('div');
         notesOverlay.id = 'notes-overlay';
