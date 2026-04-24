@@ -155,15 +155,16 @@
       <div id="brush-cursor" class="pointer-events-none fixed z-50 hidden md:block"
         style="border: 2px solid #00c896; border-radius: 50%; transform: translate(-50%, -50%); mix-blend-mode: difference;">
       </div>
-      <div id="notes-overlay" class="fixed inset-0 bg-black/50 z-25 hidden transition-opacity" style="display: none;"></div>
+      <div id="notes-overlay" class="fixed inset-0 bg-black/50 z-25 hidden transition-opacity" style="display: none;">
+      </div>
     </main>
 
     <!-- Panel de notas lateral -->
     <div id="notes-panel" class="fixed z-30 transition-all duration-300">
       <!-- Botón toggle para escritorio -->
       <button id="notes-toggle-desktop"
-        class="desktop-only fixed z-40 bg-dim/90 backdrop-blur-sm border border-white/10 rounded-lg p-2 hover:border-accent/50 transition-all shadow-lg"
-        style="left: 16px; top: 80px;">
+        class="desktop-only absolute z-50 bg-dim/90 backdrop-blur-sm border border-white/10 rounded-lg p-2 hover:border-accent/50 transition-all shadow-lg"
+        style="left: -18px; top: 50%; transform: translateY(-50%);">
         <span id="toggle-icon-desktop" class="text-white/80 text-sm font-mono">&lt;</span>
       </button>
 
@@ -193,9 +194,9 @@
     <!-- Botón toggle para móvil (debajo de zoom controls) -->
     <button id="notes-toggle-mobile"
       class="mobile-only fixed z-40 bg-dim/90 backdrop-blur-sm border border-white/10 rounded-lg w-10 h-10 p-0 flex items-center justify-center transition-all shadow-lg active:scale-95"
-      style="top: 72px; left: 12px;"
-      title="Notas">
-      <svg id="toggle-icon-mobile" class="w-5 h-5 text-white/80 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      style="top: 72px; left: 12px;" title="Notas">
+      <svg id="toggle-icon-mobile" class="w-5 h-5 text-white/80 transition-transform duration-300" fill="none"
+        stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
       </svg>
     </button>
@@ -415,7 +416,7 @@
 
       function toggleNotes(open) {
         isNotesOpen = open;
-        
+
         if (isMobile) {
           // Modo móvil
           if (open) {
@@ -449,7 +450,7 @@
             notesOverlay.style.display = 'none';
           }
         }
-        
+
         localStorage.setItem('notesOpen', open);
       }
 
@@ -526,12 +527,12 @@
 
       function handleClickOutside(event) {
         if (!isNotesOpen) return;
-        
+
         // Verificar si el clic fue fuera del panel de notas y no en el botón toggle
         const isClickInsideNotes = notesContent.contains(event.target);
         const isClickOnToggleDesktop = notesToggleDesktop && notesToggleDesktop.contains(event.target);
         const isClickOnToggleMobile = notesToggleMobile && notesToggleMobile.contains(event.target);
-        
+
         if (!isClickInsideNotes && !isClickOnToggleDesktop && !isClickOnToggleMobile) {
           toggleNotes(false);
         }

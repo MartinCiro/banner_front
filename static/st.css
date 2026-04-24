@@ -463,10 +463,20 @@ input[type=range]::-webkit-slider-thumb {
 }
 
 #notes-content {
+  position: relative; 
   pointer-events: auto;
   height: 100vh;
   background: rgba(20, 20, 20, 0.95);
   backdrop-filter: blur(12px);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#notes-toggle-desktop {
+  left: 0px !important; 
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  position: absolute !important;
+  padding: 0px 7px;
 }
 
 #notes-textarea {
@@ -679,7 +689,6 @@ input[type=range]::-webkit-slider-thumb {
     cursor: pointer;
     transition: all 0.2s ease;
     gap: 6px;
-
   }
 
   #notes-overlay.hidden {
